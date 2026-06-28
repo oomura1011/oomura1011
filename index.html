@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>飲み会・経費精算 割り勘計算</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -173,9 +172,14 @@
     /* chart */
     .chart-wrap {
       position: relative;
-      width: 100%;
-      max-width: 280px;
-      margin: 0 auto;
+      width: 260px;
+      height: 260px;
+      margin: 0 auto 4px;
+    }
+
+    .chart-wrap canvas {
+      width: 100% !important;
+      height: 100% !important;
     }
 
     /* breakdown list */
@@ -269,13 +273,11 @@
 </div>
 
 <script>
-  const totalInput   = document.getElementById('total');
-  const countInput   = document.getElementById('count');
-  const bossSlider   = document.getElementById('boss-mult');
-  const multDisplay  = document.getElementById('mult-display');
-  const resultArea   = document.getElementById('result-area');
-
-  let chart = null;
+  const totalInput  = document.getElementById('total');
+  const countInput  = document.getElementById('count');
+  const bossSlider  = document.getElementById('boss-mult');
+  const multDisplay = document.getElementById('mult-display');
+  const resultArea  = document.getElementById('result-area');
 
   const COLORS = [
     '#ffd166', '#06d6a0', '#118ab2', '#ef476f',
@@ -291,6 +293,47 @@
     bossSlider.style.setProperty('--pct', pct);
   }
 
+  function drawDoughnut(canvasId, data, colors) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const size = 260;
+    canvas.width  = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2, cy = size / 2;
+    const outerR = size / 2 - 4;
+    const innerR = outerR * 0.52;
+    const total = data.reduce((a, b) => a + b, 0);
+
+    let angle = -Math.PI / 2;
+    data.forEach((val, i) => {
+      const slice = (val / total) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, outerR, angle, angle + slice);
+      ctx.closePath();
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(15,30,70,0.6)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      angle += slice;
+    });
+
+    // 中央の穴（ドーナツ）
+    ctx.beginPath();
+    ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+    ctx.fillStyle = '#16213e';
+    ctx.fill();
+
+    // 中央テキスト
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('負担割合', cx, cy);
+  }
+
   function calculate() {
     const total = parseFloat(totalInput.value);
     const count = parseInt(countInput.value);
@@ -301,35 +344,52 @@
 
     if (!total || !count || count < 1 || total <= 0) {
       resultArea.innerHTML = '<div class="empty">合計金額と人数を入力すると計算します</div>';
-      if (chart) { chart.destroy(); chart = null; }
       return;
     }
 
     // 上司1人 + (count-1)人の通常メンバー
-    // total = bossShare + (count-1) * memberShare
-    // bossShare = mult * memberShare
-    // → total = mult * memberShare + (count-1) * memberShare = memberShare * (mult + count - 1)
+    // memberShare × (mult + count - 1) = total
     const memberShare = total / (mult + count - 1);
     const bossShare   = memberShare * mult;
+    const bossInt     = Math.round(bossShare);
+    const memberInt   = Math.round(memberShare);
 
-    const bossInt   = Math.round(bossShare);
-    const memberInt = Math.round(memberShare);
-
-    // 人数が1人の場合
     if (count === 1) {
       resultArea.innerHTML = `
         <div class="result-grid">
           <div class="result-item boss" style="grid-column:span 2">
-            <div class="label">あなた（全員）</div>
+            <div class="label">あなた（全額）</div>
             <div class="value">¥${total.toLocaleString()}</div>
           </div>
         </div>`;
-      if (chart) { chart.destroy(); chart = null; }
       return;
     }
 
-    // --- HTML 構築 ---
-    let html = `
+    const labels = ['上司'];
+    const data   = [bossInt];
+    for (let i = 1; i < count; i++) {
+      labels.push(`メンバー${i}`);
+      data.push(memberInt);
+    }
+    const totalCalc = data.reduce((a, b) => a + b, 0);
+
+    let breakdownHtml = '';
+    for (let i = 0; i < labels.length; i++) {
+      const pct = (data[i] / totalCalc * 100).toFixed(1);
+      breakdownHtml += `
+        <div class="breakdown-row">
+          <span class="breakdown-name">
+            <span class="breakdown-dot" style="background:${COLORS[i % COLORS.length]}"></span>
+            ${labels[i]}
+          </span>
+          <span>
+            <span class="breakdown-amount">¥${data[i].toLocaleString()}</span>
+            <span class="breakdown-pct">${pct}%</span>
+          </span>
+        </div>`;
+    }
+
+    resultArea.innerHTML = `
       <div class="result-grid">
         <div class="result-item boss">
           <div class="label">👑 上司</div>
@@ -343,70 +403,9 @@
       <div class="chart-wrap">
         <canvas id="pieChart"></canvas>
       </div>
-      <div class="breakdown">`;
+      <div class="breakdown">${breakdownHtml}</div>`;
 
-    // ラベル・データ生成
-    const labels = ['上司'];
-    const data   = [bossInt];
-    for (let i = 1; i < count; i++) {
-      labels.push(`メンバー${i}`);
-      data.push(memberInt);
-    }
-
-    const totalCalc = data.reduce((a, b) => a + b, 0);
-
-    for (let i = 0; i < labels.length; i++) {
-      const pct = (data[i] / totalCalc * 100).toFixed(1);
-      html += `
-        <div class="breakdown-row">
-          <span class="breakdown-name">
-            <span class="breakdown-dot" style="background:${COLORS[i % COLORS.length]}"></span>
-            ${labels[i]}
-          </span>
-          <span>
-            <span class="breakdown-amount">¥${data[i].toLocaleString()}</span>
-            <span class="breakdown-pct">${pct}%</span>
-          </span>
-        </div>`;
-    }
-
-    html += '</div>';
-    resultArea.innerHTML = html;
-
-    // Chart.js 円グラフ
-    if (chart) chart.destroy();
-    const ctx = document.getElementById('pieChart').getContext('2d');
-    chart = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: COLORS.slice(0, count),
-          borderColor: 'rgba(0,0,0,0.3)',
-          borderWidth: 2,
-          hoverOffset: 8
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            display: false
-          },
-          tooltip: {
-            callbacks: {
-              label: ctx => {
-                const val = ctx.parsed;
-                const pct = (val / totalCalc * 100).toFixed(1);
-                return ` ¥${val.toLocaleString()}  (${pct}%)`;
-              }
-            }
-          }
-        },
-        cutout: '52%'
-      }
-    });
+    drawDoughnut('pieChart', data, COLORS);
   }
 
   totalInput.addEventListener('input', calculate);
