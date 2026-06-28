@@ -140,6 +140,19 @@
       margin-top: 6px;
     }
 
+    .slider-minmax {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: #5a6280;
+      margin-top: 4px;
+    }
+
+    input[type="range"]:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
     /* result */
     .result-grid {
       display: grid;
@@ -257,11 +270,15 @@
     <h2>上司の負担調整</h2>
     <div class="slider-section">
       <div class="slider-header">
-        <label for="boss-mult">上司の支払い倍率</label>
-        <span class="slider-value" id="mult-display">×2.0</span>
+        <label for="boss-slider">👑 上司の支払い金額</label>
+        <span class="slider-value" id="boss-display">—</span>
       </div>
-      <input type="range" id="boss-mult" min="1" max="5" step="0.1" value="2">
-      <p class="slider-hint">1倍 ＝ 均等割り ／ 上げるほど上司の負担が大きくなります</p>
+      <input type="range" id="boss-slider" min="0" max="100" step="1" value="50" disabled>
+      <div class="slider-minmax">
+        <span id="slider-min-label">均等割り</span>
+        <span id="slider-max-label">合計全額</span>
+      </div>
+      <p class="slider-hint">合計金額と人数を入力するとスライダーが有効になります</p>
     </div>
   </div>
 
@@ -273,11 +290,11 @@
 </div>
 
 <script>
-  const totalInput  = document.getElementById('total');
-  const countInput  = document.getElementById('count');
-  const bossSlider  = document.getElementById('boss-mult');
-  const multDisplay = document.getElementById('mult-display');
-  const resultArea  = document.getElementById('result-area');
+  const totalInput   = document.getElementById('total');
+  const countInput   = document.getElementById('count');
+  const bossSlider   = document.getElementById('boss-slider');
+  const bossDisplay  = document.getElementById('boss-display');
+  const resultArea   = document.getElementById('result-area');
 
   const COLORS = [
     '#ffd166', '#06d6a0', '#118ab2', '#ef476f',
@@ -285,11 +302,11 @@
     '#ff9aa2', '#ffdac1'
   ];
 
-  function updateSliderBackground() {
-    const min = parseFloat(bossSlider.min);
-    const max = parseFloat(bossSlider.max);
-    const val = parseFloat(bossSlider.value);
-    const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+  // スライダーの現在値を0〜1の比率で保持
+  let sliderRatio = 0.5;
+
+  function updateSliderStyle() {
+    const pct = (parseFloat(bossSlider.value)).toFixed(1) + '%';
     bossSlider.style.setProperty('--pct', pct);
   }
 
@@ -320,13 +337,11 @@
       angle += slice;
     });
 
-    // 中央の穴（ドーナツ）
     ctx.beginPath();
     ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
     ctx.fillStyle = '#16213e';
     ctx.fill();
 
-    // 中央テキスト
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '13px sans-serif';
     ctx.textAlign = 'center';
@@ -334,37 +349,52 @@
     ctx.fillText('負担割合', cx, cy);
   }
 
-  function calculate() {
+  function render() {
     const total = parseFloat(totalInput.value);
     const count = parseInt(countInput.value);
-    const mult  = parseFloat(bossSlider.value);
 
-    multDisplay.textContent = `×${mult.toFixed(1)}`;
-    updateSliderBackground();
-
+    // 入力が揃っていなければスライダー無効
     if (!total || !count || count < 1 || total <= 0) {
+      bossSlider.disabled = true;
+      bossDisplay.textContent = '—';
+      bossSlider.value = 50;
+      updateSliderStyle();
       resultArea.innerHTML = '<div class="empty">合計金額と人数を入力すると計算します</div>';
       return;
     }
 
-    // 上司1人 + (count-1)人の通常メンバー
-    // memberShare × (mult + count - 1) = total
-    const memberShare = total / (mult + count - 1);
-    const bossShare   = memberShare * mult;
-    const bossInt     = Math.round(bossShare);
-    const memberInt   = Math.round(memberShare);
+    // 均等割り額（スライダー左端）
+    const equalShare = total / count;
 
     if (count === 1) {
+      bossSlider.disabled = true;
+      bossDisplay.textContent = `¥${Math.round(total).toLocaleString()}`;
       resultArea.innerHTML = `
         <div class="result-grid">
           <div class="result-item boss" style="grid-column:span 2">
             <div class="label">あなた（全額）</div>
-            <div class="value">¥${total.toLocaleString()}</div>
+            <div class="value">¥${Math.round(total).toLocaleString()}</div>
           </div>
         </div>`;
       return;
     }
 
+    // スライダー有効化
+    bossSlider.disabled = false;
+
+    // スライダー値（0〜100）→ 上司金額（均等〜合計）
+    const ratio   = parseFloat(bossSlider.value) / 100;
+    const bossAmt = equalShare + ratio * (total - equalShare);
+    const bossInt = Math.round(bossAmt);
+
+    // 残りをメンバーで均等割り
+    const remaining  = total - bossInt;
+    const memberInt  = count > 1 ? Math.round(remaining / (count - 1)) : 0;
+
+    bossDisplay.textContent = `¥${bossInt.toLocaleString()}`;
+    updateSliderStyle();
+
+    // ラベルとデータ
     const labels = ['上司'];
     const data   = [bossInt];
     for (let i = 1; i < count; i++) {
@@ -408,11 +438,11 @@
     drawDoughnut('pieChart', data, COLORS);
   }
 
-  totalInput.addEventListener('input', calculate);
-  countInput.addEventListener('input', calculate);
-  bossSlider.addEventListener('input', calculate);
+  totalInput.addEventListener('input', render);
+  countInput.addEventListener('input', render);
+  bossSlider.addEventListener('input', render);
 
-  updateSliderBackground();
+  updateSliderStyle();
 </script>
 </body>
 </html>
