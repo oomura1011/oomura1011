@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>月別費用メモ</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #0f172a;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --text-sub: #94a3b8;
+      --accent: #60a5fa;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 24px 16px 60px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      color: #f8fafc;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .container { max-width: 680px; margin: 0 auto; }
+
+    /* ── カード ── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* ── 月選択 ── */
+    .month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .month-nav button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      width: 36px;
+      height: 36px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .month-nav button:hover { background: var(--border); }
+
+    #month-label {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+      min-width: 130px;
+      text-align: center;
+    }
+
+    /* ── サマリー ── */
+    .summary-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .summary-box {
+      flex: 1;
+      min-width: 130px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .summary-box .s-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .summary-box .s-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .s-total { color: var(--yellow); }
+    .s-count { color: var(--accent); }
+    .s-avg   { color: var(--green); }
+
+    /* ── 入力フォーム ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    .form-group label { font-size: 0.8rem; color: var(--text-sub); }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--accent); }
+
+    .form-group textarea { resize: vertical; min-height: 62px; }
+
+    select option { background: #1e293b; }
+
+    .btn-add {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: #0f172a;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: opacity 0.15s;
+    }
+
+    .btn-add:hover { opacity: 0.88; }
+
+    /* ── グラフ ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 520px) {
+      .charts-row { grid-template-columns: 1fr; }
+      .form-grid  { grid-template-columns: 1fr; }
+    }
+
+    .chart-wrap {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .chart-wrap .chart-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    /* ── 費用リスト ── */
+    .expense-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .expense-item {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .exp-cat-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .exp-info { flex: 1; min-width: 0; }
+
+    .exp-top {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .exp-cat {
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      background: var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+
+    .exp-date { font-size: 0.75rem; color: var(--text-muted); }
+
+    .exp-memo {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .exp-amount {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--yellow);
+      flex-shrink: 0;
+    }
+
+    .btn-del {
+      background: transparent;
+      border: 1px solid #4b1c1c;
+      color: var(--red);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .btn-del:hover { background: #4b1c1c; }
+
+    .empty-msg {
+      text-align: center;
+      color: var(--border);
+      padding: 28px 0;
+      font-size: 0.9rem;
+    }
+
+    /* ── カテゴリ凡例 ── */
+    .legend-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--text-sub);
+    }
+
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>💰 月別費用メモ</h1>
+  <p class="subtitle">毎月の支出を記録・可視化</p>
+
+  <!-- 月選択 -->
+  <div class="card">
+    <div class="month-nav">
+      <button id="prev-month">&#8249;</button>
+      <span id="month-label"></span>
+      <button id="next-month">&#8250;</button>
+    </div>
+  </div>
+
+  <!-- 月合計サマリー -->
+  <div class="card">
+    <div class="card-title">今月のサマリー</div>
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="s-label">合計支出</div>
+        <div class="s-value s-total" id="sum-total">¥0</div>
+      </div>
+      <div class="summary-box">
+        <div class="s-label">件数</div>
+        <div class="s-value s-count" id="sum-count">0件</div>
+      </div>
+      <div class="summary-box">
+        <div class="s-label">1件平均</div>
+        <div class="s-value s-avg" id="sum-avg">¥0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- グラフ -->
+  <div class="card">
+    <div class="card-title">グラフ</div>
+    <div class="charts-row">
+      <div class="chart-wrap">
+        <div class="chart-subtitle">月別合計（直近12ヶ月）</div>
+        <canvas id="bar-chart"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-subtitle">カテゴリ別内訳（今月）</div>
+        <canvas id="pie-chart"></canvas>
+        <div class="legend-wrap" id="pie-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 費用追加フォーム -->
+  <div class="card">
+    <div class="card-title">費用を追加</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="f-date">日付</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="form-group">
+        <label for="f-cat">カテゴリ</label>
+        <select id="f-cat">
+          <option value="食費">🍜 食費</option>
+          <option value="交通費">🚃 交通費</option>
+          <option value="日用品">🛒 日用品</option>
+          <option value="娯楽">🎮 娯楽</option>
+          <option value="医療">🏥 医療</option>
+          <option value="光熱費">💡 光熱費</option>
+          <option value="衣類">👗 衣類</option>
+          <option value="その他">📦 その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="f-amount">金額（円）</label>
+        <input type="number" id="f-amount" placeholder="例: 1500" min="1" step="1">
+      </div>
+      <div class="form-group">
+        <label for="f-memo">メモ</label>
+        <input type="text" id="f-memo" placeholder="例: コンビニランチ">
+      </div>
+    </div>
+    <button class="btn-add" id="btn-add">追加する</button>
+  </div>
+
+  <!-- 費用リスト -->
+  <div class="card">
+    <div class="card-title">今月の費用一覧</div>
+    <div class="expense-list" id="expense-list">
+      <div class="empty-msg">まだ費用が登録されていません</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ────────────────── 定数 ────────────────── */
+  const STORAGE_KEY = 'expense_tracker_v1';
+
+  const CAT_COLORS = {
+    '食費':   '#f87171',
+    '交通費': '#fb923c',
+    '日用品': '#fbbf24',
+    '娯楽':   '#a78bfa',
+    '医療':   '#34d399',
+    '光熱費': '#38bdf8',
+    '衣類':   '#f472b6',
+    'その他': '#94a3b8',
+  };
+
+  const CAT_EMOJIS = {
+    '食費':'🍜','交通費':'🚃','日用品':'🛒','娯楽':'🎮',
+    '医療':'🏥','光熱費':'💡','衣類':'👗','その他':'📦',
+  };
+
+  /* ────────────────── 状態 ────────────────── */
+  let expenses = load();
+  let currentYear, currentMonth; // 0-indexed month
+
+  /* ────────────────── localStorage ────────────────── */
+  function load() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch { return []; }
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
+  /* ────────────────── 月ナビ ────────────────── */
+  const monthLabel  = document.getElementById('month-label');
+  const prevBtn     = document.getElementById('prev-month');
+  const nextBtn     = document.getElementById('next-month');
+
+  function initMonth() {
+    const now = new Date();
+    currentYear  = now.getFullYear();
+    currentMonth = now.getMonth();
+  }
+
+  function updateMonthLabel() {
+    monthLabel.textContent = `${currentYear}年${currentMonth + 1}月`;
+  }
+
+  prevBtn.addEventListener('click', () => {
+    currentMonth--;
+    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+    render();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    currentMonth++;
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    render();
+  });
+
+  /* ────────────────── フォーム ────────────────── */
+  const fDate   = document.getElementById('f-date');
+  const fCat    = document.getElementById('f-cat');
+  const fAmount = document.getElementById('f-amount');
+  const fMemo   = document.getElementById('f-memo');
+  const btnAdd  = document.getElementById('btn-add');
+
+  // 今日の日付をデフォルト
+  fDate.value = new Date().toISOString().slice(0, 10);
+
+  btnAdd.addEventListener('click', () => {
+    const date   = fDate.value;
+    const cat    = fCat.value;
+    const amount = parseInt(fAmount.value);
+    const memo   = fMemo.value.trim();
+
+    if (!date)           return alert('日付を入力してください');
+    if (!amount || amount <= 0) return alert('金額を正しく入力してください');
+
+    expenses.push({ id: uid(), date, cat, amount, memo });
+    save();
+
+    fAmount.value = '';
+    fMemo.value   = '';
+
+    // 追加した月に移動
+    const d = new Date(date);
+    currentYear  = d.getFullYear();
+    currentMonth = d.getMonth();
+    render();
+  });
+
+  /* ────────────────── フィルタ ────────────────── */
+  function monthExpenses() {
+    return expenses.filter(e => {
+      const d = new Date(e.date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  /* ────────────────── サマリー ────────────────── */
+  function renderSummary(list) {
+    const total = list.reduce((s, e) => s + e.amount, 0);
+    const count = list.length;
+    document.getElementById('sum-total').textContent = fmt(total);
+    document.getElementById('sum-count').textContent = count + '件';
+    document.getElementById('sum-avg').textContent   = count ? fmt(Math.round(total / count)) : '¥0';
+  }
+
+  /* ────────────────── グラフ ────────────────── */
+  let barChart = null;
+  let pieChart = null;
+
+  function renderBarChart() {
+    // 直近12ヶ月を計算
+    const labels = [];
+    const data   = [];
+
+    for (let i = 11; i >= 0; i--) {
+      let y = currentYear;
+      let m = currentMonth - i;
+      while (m < 0) { m += 12; y--; }
+      while (m > 11) { m -= 12; y++; }
+
+      labels.push(`${y}/${String(m + 1).padStart(2, '0')}`);
+
+      const total = expenses
+        .filter(e => {
+          const d = new Date(e.date);
+          return d.getFullYear() === y && d.getMonth() === m;
+        })
+        .reduce((s, e) => s + e.amount, 0);
+      data.push(total);
+    }
+
+    const ctx = document.getElementById('bar-chart').getContext('2d');
+
+    if (barChart) barChart.destroy();
+
+    barChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: data.map((_, i) =>
+            i === 11 ? 'rgba(96,165,250,0.85)' : 'rgba(96,165,250,0.35)'
+          ),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => '¥' + ctx.raw.toLocaleString('ja-JP'),
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 },
+            grid: { color: '#1e3a5f22' },
+          },
+          y: {
+            ticks: {
+              color: '#64748b',
+              font: { size: 9 },
+              callback: v => '¥' + (v >= 10000 ? (v / 10000).toFixed(0) + 'w' : v.toLocaleString()),
+            },
+            grid: { color: '#334155' },
+          }
+        }
+      }
+    });
+  }
+
+  function renderPieChart(list) {
+    const catMap = {};
+    list.forEach(e => { catMap[e.cat] = (catMap[e.cat] || 0) + e.amount; });
+
+    const labels = Object.keys(catMap);
+    const data   = labels.map(k => catMap[k]);
+    const colors = labels.map(k => CAT_COLORS[k] || '#94a3b8');
+
+    const ctx = document.getElementById('pie-chart').getContext('2d');
+
+    if (pieChart) pieChart.destroy();
+
+    const legend = document.getElementById('pie-legend');
+    legend.innerHTML = '';
+
+    if (labels.length === 0) {
+      pieChart = null;
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.fillStyle = '#334155';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('データなし', ctx.canvas.width / 2, ctx.canvas.height / 2);
+      return;
+    }
+
+    pieChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#1e293b',
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '52%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct   = ((ctx.raw / total) * 100).toFixed(1);
+                return `${ctx.label}: ¥${ctx.raw.toLocaleString('ja-JP')} (${pct}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    labels.forEach((lbl, i) => {
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      item.innerHTML = `<span class="legend-dot" style="background:${colors[i]}"></span>${CAT_EMOJIS[lbl] || ''}${lbl}`;
+      legend.appendChild(item);
+    });
+  }
+
+  /* ────────────────── 費用リスト ────────────────── */
+  function renderList(list) {
+    const el = document.getElementById('expense-list');
+
+    if (list.length === 0) {
+      el.innerHTML = '<div class="empty-msg">今月の費用はまだありません</div>';
+      return;
+    }
+
+    el.innerHTML = list.map(e => {
+      const color = CAT_COLORS[e.cat] || '#94a3b8';
+      const emoji = CAT_EMOJIS[e.cat] || '';
+      const date  = e.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      return `
+        <div class="expense-item">
+          <span class="exp-cat-dot" style="background:${color}"></span>
+          <div class="exp-info">
+            <div class="exp-top">
+              <span class="exp-cat">${emoji}${e.cat}</span>
+              <span class="exp-date">${date}</span>
+            </div>
+            ${e.memo ? `<div class="exp-memo">${escHtml(e.memo)}</div>` : ''}
+          </div>
+          <span class="exp-amount">¥${e.amount.toLocaleString('ja-JP')}</span>
+          <button class="btn-del" data-id="${e.id}" title="削除">✕</button>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.btn-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('この費用を削除しますか？')) return;
+        expenses = expenses.filter(e => e.id !== btn.dataset.id);
+        save();
+        render();
+      });
+    });
+  }
+
+  /* ────────────────── ユーティリティ ────────────────── */
+  function fmt(n) { return '¥' + n.toLocaleString('ja-JP'); }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ────────────────── メインレンダー ────────────────── */
+  function render() {
+    updateMonthLabel();
+    const list = monthExpenses();
+    renderSummary(list);
+    renderBarChart();
+    renderPieChart(list);
+    renderList(list);
+  }
+
+  /* ────────────────── 起動 ────────────────── */
+  initMonth();
+  render();
+</script>
+</body>
+</html>
