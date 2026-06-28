@@ -148,10 +148,6 @@
       margin-top: 4px;
     }
 
-    input[type="range"]:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-    }
 
     /* result */
     .result-grid {
@@ -273,12 +269,12 @@
         <label for="boss-slider">👑 上司の支払い金額</label>
         <span class="slider-value" id="boss-display">—</span>
       </div>
-      <input type="range" id="boss-slider" min="0" max="100" step="1" value="50" disabled>
+      <input type="range" id="boss-slider" min="0" max="100" step="1" value="50">
       <div class="slider-minmax">
-        <span id="slider-min-label">均等割り</span>
-        <span id="slider-max-label">合計全額</span>
+        <span id="slider-min-label">均等割り（左端）</span>
+        <span id="slider-max-label">全額（右端）</span>
       </div>
-      <p class="slider-hint">合計金額と人数を入力するとスライダーが有効になります</p>
+      <p class="slider-hint">左右にドラッグして上司の負担金額を調整してください</p>
     </div>
   </div>
 
@@ -353,11 +349,9 @@
     const total = parseFloat(totalInput.value);
     const count = parseInt(countInput.value);
 
-    // 入力が揃っていなければスライダー無効
+    // 入力が揃っていなければ結果のみ非表示
     if (!total || !count || count < 1 || total <= 0) {
-      bossSlider.disabled = true;
       bossDisplay.textContent = '—';
-      bossSlider.value = 50;
       updateSliderStyle();
       resultArea.innerHTML = '<div class="empty">合計金額と人数を入力すると計算します</div>';
       return;
@@ -367,7 +361,6 @@
     const equalShare = total / count;
 
     if (count === 1) {
-      bossSlider.disabled = true;
       bossDisplay.textContent = `¥${Math.round(total).toLocaleString()}`;
       resultArea.innerHTML = `
         <div class="result-grid">
@@ -378,9 +371,6 @@
         </div>`;
       return;
     }
-
-    // スライダー有効化
-    bossSlider.disabled = false;
 
     // スライダー値（0〜100）→ 上司金額（均等〜合計）
     const ratio   = parseFloat(bossSlider.value) / 100;
