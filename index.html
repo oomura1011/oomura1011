@@ -88,35 +88,6 @@
       color: #fbbf24;
     }
 
-    input[type="range"] {
-      width: 100%;
-      height: 6px;
-      appearance: none;
-      -webkit-appearance: none;
-      background: #334155;
-      border-radius: 3px;
-      outline: none;
-      cursor: pointer;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #fbbf24;
-      box-shadow: 0 0 8px rgba(251,191,36,0.5);
-      cursor: pointer;
-    }
-
-    .slider-hints {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.72rem;
-      color: #475569;
-      margin-top: 6px;
-    }
-
     /* result cards */
     .result-row {
       display: flex;
@@ -211,18 +182,14 @@
     </div>
   </div>
 
-  <!-- 上司スライダー -->
+  <!-- 上司入力 -->
   <div class="card">
     <div class="card-title">上司の負担調整</div>
-    <div class="slider-row">
-      <span class="slider-label">👑 上司の支払い金額</span>
-      <span class="slider-amount" id="boss-yen">—</span>
+    <div class="input-group">
+      <label for="boss-input">👑 上司の支払い金額（円）</label>
+      <input type="number" id="boss-input" placeholder="例: 10000" min="0" step="100">
     </div>
-    <input type="range" id="boss-slider" min="0" max="100" value="33">
-    <div class="slider-hints">
-      <span>◀ 均等割り</span>
-      <span>全額負担 ▶</span>
-    </div>
+    <p id="boss-hint" style="font-size:0.78rem;color:#475569;margin-top:8px;"></p>
   </div>
 
   <!-- 結果 -->
@@ -253,17 +220,17 @@
 </div>
 
 <script>
-  const inTotal   = document.getElementById('in-total');
-  const inCount   = document.getElementById('in-count');
-  const slider    = document.getElementById('boss-slider');
-  const bossYen   = document.getElementById('boss-yen');
-  const emptyMsg  = document.getElementById('empty-msg');
+  const inTotal    = document.getElementById('in-total');
+  const inCount    = document.getElementById('in-count');
+  const bossInput  = document.getElementById('boss-input');
+  const bossHint   = document.getElementById('boss-hint');
+  const emptyMsg   = document.getElementById('empty-msg');
   const resultContent = document.getElementById('result-content');
-  const dispBoss  = document.getElementById('disp-boss');
+  const dispBoss   = document.getElementById('disp-boss');
   const dispMember = document.getElementById('disp-member');
-  const breakdown = document.getElementById('breakdown');
-  const canvas    = document.getElementById('chart');
-  const ctx       = canvas.getContext('2d');
+  const breakdown  = document.getElementById('breakdown');
+  const canvas     = document.getElementById('chart');
+  const ctx        = canvas.getContext('2d');
 
   const COLORS = [
     '#fbbf24', '#34d399', '#60a5fa', '#f87171',
@@ -279,9 +246,7 @@
     const R  = Math.min(W, H) / 2 - 6;
     const r  = R * 0.50;
     const total = data.reduce((a, b) => a + b, 0);
-
     ctx.clearRect(0, 0, W, H);
-
     let angle = -Math.PI / 2;
     data.forEach((val, i) => {
       const sweep = (val / total) * Math.PI * 2;
@@ -296,14 +261,10 @@
       ctx.stroke();
       angle += sweep;
     });
-
-    // 中央穴
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = '#1e293b';
     ctx.fill();
-
-    // 中央テキスト
     ctx.fillStyle = '#64748b';
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
@@ -314,22 +275,30 @@
   function update() {
     const total = parseFloat(inTotal.value);
     const count = parseInt(inCount.value);
-    const pct   = parseFloat(slider.value) / 100; // 0〜1
 
-    // 入力不足
+    // 合計・人数が未入力
     if (!total || total <= 0 || !count || count < 1) {
-      bossYen.textContent = '—';
+      bossHint.textContent = '';
       emptyMsg.classList.remove('hidden');
       resultContent.classList.add('hidden');
       return;
     }
 
-    const equal   = total / count;                    // 均等割り額
-    const bossAmt = equal + pct * (total - equal);    // スライダー → 上司金額
-    const bossInt = Math.round(bossAmt);
+    const equal = Math.round(total / count);
+    bossHint.textContent = `均等割りの場合: ${fmt(equal)} ／ 合計: ${fmt(total)}`;
 
-    // 上司金額表示（スライダー横）
-    bossYen.textContent = fmt(bossInt);
+    // 上司金額（未入力なら均等割りをデフォルトに）
+    let bossAmt = parseFloat(bossInput.value);
+    if (isNaN(bossAmt) || bossInput.value === '') {
+      emptyMsg.classList.remove('hidden');
+      resultContent.classList.add('hidden');
+      return;
+    }
+
+    // バリデーション
+    if (bossAmt < 0) bossAmt = 0;
+    if (bossAmt > total) bossAmt = total;
+    const bossInt = Math.round(bossAmt);
 
     // 1人の場合
     if (count === 1) {
@@ -345,19 +314,15 @@
     const remaining  = total - bossInt;
     const memberAmt  = Math.round(remaining / (count - 1));
 
-    // 結果表示
     emptyMsg.classList.add('hidden');
     resultContent.classList.remove('hidden');
     dispBoss.textContent   = fmt(bossInt);
     dispMember.textContent = fmt(memberAmt);
 
-    // チャート用データ
     const data = [bossInt];
     for (let i = 1; i < count; i++) data.push(memberAmt);
-
     drawChart(data);
 
-    // 内訳リスト
     const totalCalc = data.reduce((a, b) => a + b, 0);
     const names = ['上司'];
     for (let i = 1; i < count; i++) names.push('メンバー' + i);
@@ -379,7 +344,7 @@
 
   inTotal.addEventListener('input', update);
   inCount.addEventListener('input', update);
-  slider.addEventListener('input', update);
+  bossInput.addEventListener('input', update);
 
   update();
 </script>
