@@ -3,436 +3,385 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>飲み会・経費精算 割り勘計算</title>
+  <title>割り勘計算</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background: #0f172a;
       min-height: 100vh;
-      padding: 20px;
-      color: #e0e0e0;
-    }
-
-    .container {
-      max-width: 700px;
-      margin: 0 auto;
+      padding: 24px 16px;
+      color: #e2e8f0;
     }
 
     h1 {
       text-align: center;
-      font-size: 1.6rem;
-      margin-bottom: 24px;
-      color: #fff;
-      letter-spacing: 0.05em;
-    }
-
-    h1 span {
-      font-size: 1.2rem;
-      display: block;
-      color: #a0c4ff;
-      margin-top: 4px;
-    }
-
-    .card {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 16px;
-      backdrop-filter: blur(10px);
-    }
-
-    .card h2 {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #a0c4ff;
-      margin-bottom: 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .field {
-      flex: 1;
-      min-width: 140px;
-    }
-
-    label {
-      display: block;
-      font-size: 0.82rem;
-      color: #b0b8cc;
+      font-size: 1.5rem;
+      color: #f8fafc;
       margin-bottom: 6px;
     }
 
-    input[type="number"] {
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    .container { max-width: 640px; margin: 0 auto; }
+
+    .card {
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* inputs */
+    .input-row { display: flex; gap: 12px; }
+
+    .input-group { flex: 1; }
+
+    .input-group label {
+      display: block;
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .input-group input {
       width: 100%;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 10px;
-      color: #fff;
-      font-size: 1rem;
+      padding: 10px 14px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: 1.05rem;
       outline: none;
-      transition: border-color 0.2s;
     }
 
-    input[type="number"]:focus {
-      border-color: #a0c4ff;
-    }
+    .input-group input:focus { border-color: #60a5fa; }
 
-    /* slider section */
-    .slider-section {
-      margin-top: 4px;
-    }
-
-    .slider-header {
+    /* slider */
+    .slider-row {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+      align-items: baseline;
+      margin-bottom: 10px;
     }
 
-    .slider-header label {
-      margin: 0;
-      font-size: 0.9rem;
-      color: #e0e0e0;
-    }
+    .slider-label { font-size: 0.9rem; color: #cbd5e1; }
 
-    .slider-value {
-      font-size: 1.1rem;
+    .slider-amount {
+      font-size: 1.3rem;
       font-weight: 700;
-      color: #ffd166;
-      min-width: 40px;
-      text-align: right;
+      color: #fbbf24;
     }
 
     input[type="range"] {
       width: 100%;
+      height: 6px;
       appearance: none;
       -webkit-appearance: none;
-      height: 6px;
+      background: #334155;
       border-radius: 3px;
-      background: linear-gradient(to right, #ffd166 var(--pct, 60%), rgba(255,255,255,0.15) var(--pct, 60%));
       outline: none;
       cursor: pointer;
     }
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      background: #ffd166;
-      box-shadow: 0 0 6px rgba(255, 209, 102, 0.6);
+      background: #fbbf24;
+      box-shadow: 0 0 8px rgba(251,191,36,0.5);
       cursor: pointer;
     }
 
-    .slider-hint {
-      font-size: 0.75rem;
-      color: #7a8099;
-      margin-top: 6px;
-    }
-
-    .slider-minmax {
+    .slider-hints {
       display: flex;
       justify-content: space-between;
       font-size: 0.72rem;
-      color: #5a6280;
-      margin-top: 4px;
+      color: #475569;
+      margin-top: 6px;
     }
 
-
-    /* result */
-    .result-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 16px;
+    /* result cards */
+    .result-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
     }
 
-    .result-item {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
+    .result-box {
+      flex: 1;
+      background: #0f172a;
+      border-radius: 10px;
       padding: 14px;
       text-align: center;
     }
 
-    .result-item .label {
-      font-size: 0.75rem;
-      color: #8090b0;
-      margin-bottom: 4px;
+    .result-box .r-label {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 6px;
     }
 
-    .result-item .value {
-      font-size: 1.35rem;
+    .result-box .r-value {
+      font-size: 1.4rem;
       font-weight: 700;
     }
 
-    .result-item.boss .value { color: #ffd166; }
-    .result-item.member .value { color: #a0e0a0; }
+    .result-box.boss .r-value { color: #fbbf24; }
+    .result-box.member .r-value { color: #34d399; }
 
     /* chart */
-    .chart-wrap {
-      position: relative;
-      width: 260px;
-      height: 260px;
-      margin: 0 auto 4px;
+    .chart-area {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
     }
 
-    .chart-wrap canvas {
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* breakdown list */
-    .breakdown {
-      margin-top: 14px;
-    }
-
+    /* breakdown */
     .breakdown-row {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      font-size: 0.9rem;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 0.88rem;
     }
 
     .breakdown-row:last-child { border-bottom: none; }
 
-    .breakdown-dot {
-      width: 10px;
-      height: 10px;
+    .dot {
+      width: 10px; height: 10px;
       border-radius: 50%;
-      display: inline-block;
       margin-right: 8px;
       flex-shrink: 0;
     }
 
-    .breakdown-name {
-      display: flex;
-      align-items: center;
-      flex: 1;
-    }
+    .row-name { display: flex; align-items: center; flex: 1; }
 
-    .breakdown-amount {
-      font-weight: 600;
-      color: #fff;
-    }
+    .row-right { display: flex; align-items: baseline; gap: 6px; }
 
-    .breakdown-pct {
-      font-size: 0.75rem;
-      color: #7a8099;
-      margin-left: 8px;
-    }
+    .row-amt { font-weight: 600; color: #f1f5f9; }
+
+    .row-pct { font-size: 0.73rem; color: #475569; }
 
     /* empty state */
-    .empty {
+    .empty-msg {
       text-align: center;
-      color: #4a5270;
-      padding: 30px 0;
+      color: #334155;
+      padding: 24px 0;
       font-size: 0.9rem;
     }
+
+    .hidden { display: none; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>🍻 割り勘計算<span>飲み会・経費精算ツール</span></h1>
+  <h1>🍻 割り勘計算</h1>
+  <p class="subtitle">飲み会・経費精算ツール</p>
 
-  <!-- 入力カード -->
+  <!-- 基本情報 -->
   <div class="card">
-    <h2>基本情報</h2>
-    <div class="row">
-      <div class="field">
-        <label for="total">合計金額（円）</label>
-        <input type="number" id="total" placeholder="例: 30000" min="0" step="100">
+    <div class="card-title">基本情報</div>
+    <div class="input-row">
+      <div class="input-group">
+        <label for="in-total">合計金額（円）</label>
+        <input type="number" id="in-total" placeholder="例: 30000" min="1" step="100">
       </div>
-      <div class="field">
-        <label for="count">人数（名）</label>
-        <input type="number" id="count" placeholder="例: 5" min="1" step="1">
+      <div class="input-group">
+        <label for="in-count">人数（名）</label>
+        <input type="number" id="in-count" placeholder="例: 5" min="1" step="1">
       </div>
     </div>
   </div>
 
-  <!-- 上司スライダーカード -->
+  <!-- 上司スライダー -->
   <div class="card">
-    <h2>上司の負担調整</h2>
-    <div class="slider-section">
-      <div class="slider-header">
-        <label for="boss-slider">👑 上司の支払い金額</label>
-        <span class="slider-value" id="boss-display">—</span>
-      </div>
-      <input type="range" id="boss-slider" min="0" max="100" step="1" value="50">
-      <div class="slider-minmax">
-        <span id="slider-min-label">均等割り（左端）</span>
-        <span id="slider-max-label">全額（右端）</span>
-      </div>
-      <p class="slider-hint">左右にドラッグして上司の負担金額を調整してください</p>
+    <div class="card-title">上司の負担調整</div>
+    <div class="slider-row">
+      <span class="slider-label">👑 上司の支払い金額</span>
+      <span class="slider-amount" id="boss-yen">—</span>
+    </div>
+    <input type="range" id="boss-slider" min="0" max="100" value="33">
+    <div class="slider-hints">
+      <span>◀ 均等割り</span>
+      <span>全額負担 ▶</span>
     </div>
   </div>
 
-  <!-- 結果カード -->
+  <!-- 結果 -->
   <div class="card" id="result-card">
-    <h2>計算結果</h2>
-    <div id="result-area" class="empty">合計金額と人数を入力すると計算します</div>
+    <div class="card-title">計算結果</div>
+
+    <div id="empty-msg" class="empty-msg">合計金額と人数を入力すると計算します</div>
+
+    <div id="result-content" class="hidden">
+      <div class="result-row">
+        <div class="result-box boss">
+          <div class="r-label">👑 上司</div>
+          <div class="r-value" id="disp-boss">¥0</div>
+        </div>
+        <div class="result-box member">
+          <div class="r-label">👤 メンバー（1人あたり）</div>
+          <div class="r-value" id="disp-member">¥0</div>
+        </div>
+      </div>
+
+      <div class="chart-area">
+        <canvas id="chart" width="240" height="240"></canvas>
+      </div>
+
+      <div id="breakdown"></div>
+    </div>
   </div>
 </div>
 
 <script>
-  const totalInput   = document.getElementById('total');
-  const countInput   = document.getElementById('count');
-  const bossSlider   = document.getElementById('boss-slider');
-  const bossDisplay  = document.getElementById('boss-display');
-  const resultArea   = document.getElementById('result-area');
+  const inTotal   = document.getElementById('in-total');
+  const inCount   = document.getElementById('in-count');
+  const slider    = document.getElementById('boss-slider');
+  const bossYen   = document.getElementById('boss-yen');
+  const emptyMsg  = document.getElementById('empty-msg');
+  const resultContent = document.getElementById('result-content');
+  const dispBoss  = document.getElementById('disp-boss');
+  const dispMember = document.getElementById('disp-member');
+  const breakdown = document.getElementById('breakdown');
+  const canvas    = document.getElementById('chart');
+  const ctx       = canvas.getContext('2d');
 
   const COLORS = [
-    '#ffd166', '#06d6a0', '#118ab2', '#ef476f',
-    '#a0c4ff', '#ffb347', '#b5ead7', '#c7ceea',
-    '#ff9aa2', '#ffdac1'
+    '#fbbf24', '#34d399', '#60a5fa', '#f87171',
+    '#a78bfa', '#fb923c', '#4ade80', '#38bdf8',
+    '#f472b6', '#facc15'
   ];
 
-  // スライダーの現在値を0〜1の比率で保持
-  let sliderRatio = 0.5;
+  function fmt(n) { return '¥' + Math.round(n).toLocaleString('ja-JP'); }
 
-  function updateSliderStyle() {
-    const pct = (parseFloat(bossSlider.value)).toFixed(1) + '%';
-    bossSlider.style.setProperty('--pct', pct);
-  }
-
-  function drawDoughnut(canvasId, data, colors) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
-    const size = 260;
-    canvas.width  = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const cx = size / 2, cy = size / 2;
-    const outerR = size / 2 - 4;
-    const innerR = outerR * 0.52;
+  function drawChart(data) {
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2;
+    const R  = Math.min(W, H) / 2 - 6;
+    const r  = R * 0.50;
     const total = data.reduce((a, b) => a + b, 0);
+
+    ctx.clearRect(0, 0, W, H);
 
     let angle = -Math.PI / 2;
     data.forEach((val, i) => {
-      const slice = (val / total) * Math.PI * 2;
+      const sweep = (val / total) * Math.PI * 2;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, outerR, angle, angle + slice);
+      ctx.arc(cx, cy, R, angle, angle + sweep);
       ctx.closePath();
-      ctx.fillStyle = colors[i % colors.length];
+      ctx.fillStyle = COLORS[i % COLORS.length];
       ctx.fill();
-      ctx.strokeStyle = 'rgba(15,30,70,0.6)';
+      ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 2;
       ctx.stroke();
-      angle += slice;
+      angle += sweep;
     });
 
+    // 中央穴
     ctx.beginPath();
-    ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-    ctx.fillStyle = '#16213e';
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#1e293b';
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '13px sans-serif';
+    // 中央テキスト
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('負担割合', cx, cy);
   }
 
-  function render() {
-    const total = parseFloat(totalInput.value);
-    const count = parseInt(countInput.value);
+  function update() {
+    const total = parseFloat(inTotal.value);
+    const count = parseInt(inCount.value);
+    const pct   = parseFloat(slider.value) / 100; // 0〜1
 
-    // 入力が揃っていなければ結果のみ非表示
-    if (!total || !count || count < 1 || total <= 0) {
-      bossDisplay.textContent = '—';
-      updateSliderStyle();
-      resultArea.innerHTML = '<div class="empty">合計金額と人数を入力すると計算します</div>';
+    // 入力不足
+    if (!total || total <= 0 || !count || count < 1) {
+      bossYen.textContent = '—';
+      emptyMsg.classList.remove('hidden');
+      resultContent.classList.add('hidden');
       return;
     }
 
-    // 均等割り額（スライダー左端）
-    const equalShare = total / count;
-
-    if (count === 1) {
-      bossDisplay.textContent = `¥${Math.round(total).toLocaleString()}`;
-      resultArea.innerHTML = `
-        <div class="result-grid">
-          <div class="result-item boss" style="grid-column:span 2">
-            <div class="label">あなた（全額）</div>
-            <div class="value">¥${Math.round(total).toLocaleString()}</div>
-          </div>
-        </div>`;
-      return;
-    }
-
-    // スライダー値（0〜100）→ 上司金額（均等〜合計）
-    const ratio   = parseFloat(bossSlider.value) / 100;
-    const bossAmt = equalShare + ratio * (total - equalShare);
+    const equal   = total / count;                    // 均等割り額
+    const bossAmt = equal + pct * (total - equal);    // スライダー → 上司金額
     const bossInt = Math.round(bossAmt);
 
-    // 残りをメンバーで均等割り
+    // 上司金額表示（スライダー横）
+    bossYen.textContent = fmt(bossInt);
+
+    // 1人の場合
+    if (count === 1) {
+      emptyMsg.classList.add('hidden');
+      resultContent.classList.remove('hidden');
+      dispBoss.textContent   = fmt(total);
+      dispMember.textContent = '—';
+      drawChart([total]);
+      breakdown.innerHTML = '';
+      return;
+    }
+
     const remaining  = total - bossInt;
-    const memberInt  = count > 1 ? Math.round(remaining / (count - 1)) : 0;
+    const memberAmt  = Math.round(remaining / (count - 1));
 
-    bossDisplay.textContent = `¥${bossInt.toLocaleString()}`;
-    updateSliderStyle();
+    // 結果表示
+    emptyMsg.classList.add('hidden');
+    resultContent.classList.remove('hidden');
+    dispBoss.textContent   = fmt(bossInt);
+    dispMember.textContent = fmt(memberAmt);
 
-    // ラベルとデータ
-    const labels = ['上司'];
-    const data   = [bossInt];
-    for (let i = 1; i < count; i++) {
-      labels.push(`メンバー${i}`);
-      data.push(memberInt);
-    }
+    // チャート用データ
+    const data = [bossInt];
+    for (let i = 1; i < count; i++) data.push(memberAmt);
+
+    drawChart(data);
+
+    // 内訳リスト
     const totalCalc = data.reduce((a, b) => a + b, 0);
+    const names = ['上司'];
+    for (let i = 1; i < count; i++) names.push('メンバー' + i);
 
-    let breakdownHtml = '';
-    for (let i = 0; i < labels.length; i++) {
-      const pct = (data[i] / totalCalc * 100).toFixed(1);
-      breakdownHtml += `
-        <div class="breakdown-row">
-          <span class="breakdown-name">
-            <span class="breakdown-dot" style="background:${COLORS[i % COLORS.length]}"></span>
-            ${labels[i]}
-          </span>
-          <span>
-            <span class="breakdown-amount">¥${data[i].toLocaleString()}</span>
-            <span class="breakdown-pct">${pct}%</span>
-          </span>
-        </div>`;
-    }
-
-    resultArea.innerHTML = `
-      <div class="result-grid">
-        <div class="result-item boss">
-          <div class="label">👑 上司</div>
-          <div class="value">¥${bossInt.toLocaleString()}</div>
-        </div>
-        <div class="result-item member">
-          <div class="label">👤 メンバー（1人あたり）</div>
-          <div class="value">¥${memberInt.toLocaleString()}</div>
-        </div>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="pieChart"></canvas>
-      </div>
-      <div class="breakdown">${breakdownHtml}</div>`;
-
-    drawDoughnut('pieChart', data, COLORS);
+    breakdown.innerHTML = data.map((v, i) => {
+      const p = (v / totalCalc * 100).toFixed(1);
+      return `<div class="breakdown-row">
+        <span class="row-name">
+          <span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>
+          ${names[i]}
+        </span>
+        <span class="row-right">
+          <span class="row-amt">${fmt(v)}</span>
+          <span class="row-pct">${p}%</span>
+        </span>
+      </div>`;
+    }).join('');
   }
 
-  totalInput.addEventListener('input', render);
-  countInput.addEventListener('input', render);
-  bossSlider.addEventListener('input', render);
+  inTotal.addEventListener('input', update);
+  inCount.addEventListener('input', update);
+  slider.addEventListener('input', update);
 
-  updateSliderStyle();
+  update();
 </script>
 </body>
 </html>
