@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>飲み会・経費精算 割り勘計算</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #e0e0e0;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin-bottom: 24px;
+      color: #fff;
+      letter-spacing: 0.05em;
+    }
+
+    h1 span {
+      font-size: 1.2rem;
+      display: block;
+      color: #a0c4ff;
+      margin-top: 4px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #a0c4ff;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: #b0b8cc;
+      margin-bottom: 6px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="number"]:focus {
+      border-color: #a0c4ff;
+    }
+
+    /* slider section */
+    .slider-section {
+      margin-top: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .slider-header label {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #e0e0e0;
+    }
+
+    .slider-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #ffd166;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, #ffd166 var(--pct, 60%), rgba(255,255,255,0.15) var(--pct, 60%));
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffd166;
+      box-shadow: 0 0 6px rgba(255, 209, 102, 0.6);
+      cursor: pointer;
+    }
+
+    .slider-hint {
+      font-size: 0.75rem;
+      color: #7a8099;
+      margin-top: 6px;
+    }
+
+    /* result */
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .result-item {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .result-item .label {
+      font-size: 0.75rem;
+      color: #8090b0;
+      margin-bottom: 4px;
+    }
+
+    .result-item .value {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .result-item.boss .value { color: #ffd166; }
+    .result-item.member .value { color: #a0e0a0; }
+
+    /* chart */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 280px;
+      margin: 0 auto;
+    }
+
+    /* breakdown list */
+    .breakdown {
+      margin-top: 14px;
+    }
+
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.9rem;
+    }
+
+    .breakdown-row:last-child { border-bottom: none; }
+
+    .breakdown-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .breakdown-name {
+      display: flex;
+      align-items: center;
+      flex: 1;
+    }
+
+    .breakdown-amount {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .breakdown-pct {
+      font-size: 0.75rem;
+      color: #7a8099;
+      margin-left: 8px;
+    }
+
+    /* empty state */
+    .empty {
+      text-align: center;
+      color: #4a5270;
+      padding: 30px 0;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🍻 割り勘計算<span>飲み会・経費精算ツール</span></h1>
+
+  <!-- 入力カード -->
+  <div class="card">
+    <h2>基本情報</h2>
+    <div class="row">
+      <div class="field">
+        <label for="total">合計金額（円）</label>
+        <input type="number" id="total" placeholder="例: 30000" min="0" step="100">
+      </div>
+      <div class="field">
+        <label for="count">人数（名）</label>
+        <input type="number" id="count" placeholder="例: 5" min="1" step="1">
+      </div>
+    </div>
+  </div>
+
+  <!-- 上司スライダーカード -->
+  <div class="card">
+    <h2>上司の負担調整</h2>
+    <div class="slider-section">
+      <div class="slider-header">
+        <label for="boss-mult">上司の支払い倍率</label>
+        <span class="slider-value" id="mult-display">×2.0</span>
+      </div>
+      <input type="range" id="boss-mult" min="1" max="5" step="0.1" value="2">
+      <p class="slider-hint">1倍 ＝ 均等割り ／ 上げるほど上司の負担が大きくなります</p>
+    </div>
+  </div>
+
+  <!-- 結果カード -->
+  <div class="card" id="result-card">
+    <h2>計算結果</h2>
+    <div id="result-area" class="empty">合計金額と人数を入力すると計算します</div>
+  </div>
+</div>
+
+<script>
+  const totalInput   = document.getElementById('total');
+  const countInput   = document.getElementById('count');
+  const bossSlider   = document.getElementById('boss-mult');
+  const multDisplay  = document.getElementById('mult-display');
+  const resultArea   = document.getElementById('result-area');
+
+  let chart = null;
+
+  const COLORS = [
+    '#ffd166', '#06d6a0', '#118ab2', '#ef476f',
+    '#a0c4ff', '#ffb347', '#b5ead7', '#c7ceea',
+    '#ff9aa2', '#ffdac1'
+  ];
+
+  function updateSliderBackground() {
+    const min = parseFloat(bossSlider.min);
+    const max = parseFloat(bossSlider.max);
+    const val = parseFloat(bossSlider.value);
+    const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+    bossSlider.style.setProperty('--pct', pct);
+  }
+
+  function calculate() {
+    const total = parseFloat(totalInput.value);
+    const count = parseInt(countInput.value);
+    const mult  = parseFloat(bossSlider.value);
+
+    multDisplay.textContent = `×${mult.toFixed(1)}`;
+    updateSliderBackground();
+
+    if (!total || !count || count < 1 || total <= 0) {
+      resultArea.innerHTML = '<div class="empty">合計金額と人数を入力すると計算します</div>';
+      if (chart) { chart.destroy(); chart = null; }
+      return;
+    }
+
+    // 上司1人 + (count-1)人の通常メンバー
+    // total = bossShare + (count-1) * memberShare
+    // bossShare = mult * memberShare
+    // → total = mult * memberShare + (count-1) * memberShare = memberShare * (mult + count - 1)
+    const memberShare = total / (mult + count - 1);
+    const bossShare   = memberShare * mult;
+
+    const bossInt   = Math.round(bossShare);
+    const memberInt = Math.round(memberShare);
+
+    // 人数が1人の場合
+    if (count === 1) {
+      resultArea.innerHTML = `
+        <div class="result-grid">
+          <div class="result-item boss" style="grid-column:span 2">
+            <div class="label">あなた（全員）</div>
+            <div class="value">¥${total.toLocaleString()}</div>
+          </div>
+        </div>`;
+      if (chart) { chart.destroy(); chart = null; }
+      return;
+    }
+
+    // --- HTML 構築 ---
+    let html = `
+      <div class="result-grid">
+        <div class="result-item boss">
+          <div class="label">👑 上司</div>
+          <div class="value">¥${bossInt.toLocaleString()}</div>
+        </div>
+        <div class="result-item member">
+          <div class="label">👤 メンバー（1人あたり）</div>
+          <div class="value">¥${memberInt.toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="pieChart"></canvas>
+      </div>
+      <div class="breakdown">`;
+
+    // ラベル・データ生成
+    const labels = ['上司'];
+    const data   = [bossInt];
+    for (let i = 1; i < count; i++) {
+      labels.push(`メンバー${i}`);
+      data.push(memberInt);
+    }
+
+    const totalCalc = data.reduce((a, b) => a + b, 0);
+
+    for (let i = 0; i < labels.length; i++) {
+      const pct = (data[i] / totalCalc * 100).toFixed(1);
+      html += `
+        <div class="breakdown-row">
+          <span class="breakdown-name">
+            <span class="breakdown-dot" style="background:${COLORS[i % COLORS.length]}"></span>
+            ${labels[i]}
+          </span>
+          <span>
+            <span class="breakdown-amount">¥${data[i].toLocaleString()}</span>
+            <span class="breakdown-pct">${pct}%</span>
+          </span>
+        </div>`;
+    }
+
+    html += '</div>';
+    resultArea.innerHTML = html;
+
+    // Chart.js 円グラフ
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: COLORS.slice(0, count),
+          borderColor: 'rgba(0,0,0,0.3)',
+          borderWidth: 2,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const val = ctx.parsed;
+                const pct = (val / totalCalc * 100).toFixed(1);
+                return ` ¥${val.toLocaleString()}  (${pct}%)`;
+              }
+            }
+          }
+        },
+        cutout: '52%'
+      }
+    });
+  }
+
+  totalInput.addEventListener('input', calculate);
+  countInput.addEventListener('input', calculate);
+  bossSlider.addEventListener('input', calculate);
+
+  updateSliderBackground();
+</script>
+</body>
+</html>
