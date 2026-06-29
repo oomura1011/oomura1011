@@ -5,162 +5,153 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ArUco マーカー検出</title>
+  <title>ArUco 計測</title>
 
-  <!-- js-aruco: MIT License, jcmellado/js-aruco -->
   <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/posit2.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --safe-top:    env(safe-area-inset-top, 12px);
       --safe-bottom: env(safe-area-inset-bottom, 16px);
     }
+    html, body { width:100%; height:100%; background:#000; overflow:hidden;
+      font-family: -apple-system,'Helvetica Neue',sans-serif; }
 
-    html, body {
-      width: 100%; height: 100%;
-      background: #000;
-      overflow: hidden;
-      font-family: -apple-system, 'Helvetica Neue', sans-serif;
-    }
-
-    #container {
-      position: relative;
-      width: 100%; height: 100%;
-    }
-
-    video {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-    }
-
-    canvas#overlay {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-      pointer-events: none;
-    }
-
-    canvas#proc { display: none; }
+    #container { position:relative; width:100%; height:100%; }
+    video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    canvas#overlay { position:absolute; inset:0; width:100%; height:100%;
+      object-fit:cover; pointer-events:none; }
+    canvas#proc { display:none; }
 
     #header {
-      position: absolute;
-      top: var(--safe-top);
-      left: 50%; transform: translateX(-50%);
-      margin-top: 12px;
-      z-index: 10;
+      position:absolute; top:calc(var(--safe-top) + 12px);
+      left:50%; transform:translateX(-50%); z-index:20;
     }
     #title-pill {
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      color: #fff;
-      font-size: 15px; font-weight: 600;
-      padding: 8px 20px;
-      border-radius: 20px;
-      white-space: nowrap;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      color:#fff; font-size:15px; font-weight:600;
+      padding:8px 20px; border-radius:20px; white-space:nowrap;
     }
 
-    #status {
-      position: absolute;
-      bottom: calc(var(--safe-bottom) + 10px);
-      left: 16px; right: 16px;
-      display: flex; gap: 8px; align-items: center;
-      z-index: 10;
+    #settings {
+      position:absolute; top:calc(var(--safe-top) + 12px); right:16px;
+      z-index:20; display:flex; flex-direction:column; gap:6px; align-items:flex-end;
     }
-    .badge {
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      color: #fff;
-      font-size: 12px; font-weight: 600;
-      padding: 5px 12px;
-      border-radius: 12px;
-      white-space: nowrap;
+    .set-row {
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      border-radius:12px; padding:6px 12px;
+      display:flex; align-items:center; gap:8px;
     }
-    #fps-badge { color: #4ade80; }
-    #dict-badge { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .set-label { color:#94a3b8; font-size:11px; white-space:nowrap; }
+    .set-input {
+      background:transparent; border:none; border-bottom:1px solid #475569;
+      color:#fff; font-size:13px; font-weight:600; width:60px;
+      text-align:right; outline:none;
+    }
+    .set-unit { color:#64748b; font-size:11px; }
+
+    #panel {
+      position:absolute; bottom:0; left:0; right:0;
+      background:rgba(10,15,30,0.92); backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      border-top:1px solid #1e293b;
+      padding:14px 16px calc(var(--safe-bottom) + 14px);
+      z-index:20; transition:transform 0.3s ease;
+    }
+    #panel.collapsed { transform:translateY(calc(100% - 48px)); }
+
+    #panel-handle {
+      width:36px; height:4px; background:#334155;
+      border-radius:2px; margin:0 auto 12px;
+      cursor:pointer;
+    }
+
+    #marker-tabs {
+      display:flex; gap:6px; margin-bottom:12px; overflow-x:auto;
+      scrollbar-width:none;
+    }
+    #marker-tabs::-webkit-scrollbar { display:none; }
+    .m-tab {
+      flex-shrink:0; padding:4px 12px; border-radius:10px;
+      font-size:12px; font-weight:700; cursor:pointer;
+      border:1.5px solid transparent;
+      color:#94a3b8; background:rgba(255,255,255,0.05);
+    }
+    .m-tab.active { color:#fff; border-color:var(--tc,#4ade80); }
+
+    #meas-grid {
+      display:grid; grid-template-columns:1fr 1fr;
+      gap:8px; margin-bottom:12px;
+    }
+    .meas-card {
+      background:rgba(255,255,255,0.04); border-radius:10px;
+      padding:10px 12px;
+    }
+    .meas-card.full { grid-column:1/-1; }
+    .meas-card h4 {
+      font-size:10px; font-weight:700; letter-spacing:0.08em;
+      color:#475569; text-transform:uppercase; margin-bottom:6px;
+    }
+    .meas-row {
+      display:flex; justify-content:space-between; align-items:baseline;
+      margin-bottom:2px;
+    }
+    .meas-key { font-size:11px; color:#64748b; }
+    .meas-val {
+      font-size:14px; font-weight:700; color:#f1f5f9;
+      font-variant-numeric:tabular-nums;
+    }
+    .meas-val.good { color:#4ade80; }
+    .meas-val.warn { color:#fbbf24; }
+    .meas-val.bad  { color:#f87171; }
+
+    #btn-row { display:flex; gap:8px; }
+    .btn {
+      flex:1; padding:10px; border:none; border-radius:10px;
+      font-size:13px; font-weight:700; cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    }
+    #btn-master { background:#4ade80; color:#000; }
+    #btn-master.has-master { background:#22c55e; }
+    #btn-clear  { background:rgba(255,255,255,0.08); color:#94a3b8; }
+
+    #no-marker {
+      color:#334155; font-size:13px; text-align:center; padding:12px 0;
+    }
 
     #splash {
-      position: absolute; inset: 0;
-      background: #000;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 20px; padding: 40px;
-      z-index: 20;
+      position:absolute; inset:0; background:#000;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:20px; padding:40px; z-index:40;
     }
-    #splash.hidden { display: none; }
-
-    .splash-icon {
-      width: 80px; height: 80px;
-      border: 3px solid #4ade80;
-      border-radius: 16px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 40px;
-    }
-    #splash h2 { color: #fff; font-size: 22px; font-weight: 700; text-align: center; }
-    #splash p  { color: #94a3b8; font-size: 14px; line-height: 1.65; text-align: center; }
-
+    #splash.hidden { display:none; }
+    #splash h2 { color:#fff; font-size:22px; font-weight:700; text-align:center; }
+    #splash p  { color:#94a3b8; font-size:14px; line-height:1.65; text-align:center; }
     #start-btn {
-      background: #4ade80;
-      color: #000;
-      border: none;
-      border-radius: 14px;
-      padding: 15px 40px;
-      font-size: 17px; font-weight: 700;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      transition: transform 0.1s;
+      background:#4ade80; color:#000; border:none;
+      border-radius:14px; padding:15px 40px;
+      font-size:17px; font-weight:700; cursor:pointer;
     }
-    #start-btn:active { transform: scale(0.96); }
-
     #loading {
-      position: absolute; inset: 0;
-      background: rgba(0,0,0,0.75);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 16px; z-index: 30;
+      position:absolute; inset:0; background:rgba(0,0,0,0.8);
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:16px; z-index:50;
     }
-    #loading.hidden { display: none; }
-
+    #loading.hidden { display:none; }
     .spinner {
-      width: 44px; height: 44px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: #4ade80;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      width:44px; height:44px;
+      border:3px solid rgba(255,255,255,0.15);
+      border-top-color:#4ade80; border-radius:50%;
+      animation:spin 0.8s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { color: #94a3b8; font-size: 14px; }
-
-    #marker-list {
-      position: absolute;
-      top: calc(var(--safe-top) + 60px);
-      right: 16px;
-      display: flex; flex-direction: column; gap: 6px;
-      z-index: 10;
-      max-height: 60vh;
-      overflow: hidden;
-    }
-    .marker-tag {
-      background: rgba(0,0,0,0.65);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border-radius: 12px;
-      padding: 6px 12px;
-      font-size: 13px; font-weight: 700;
-      color: #fff;
-      border-left: 4px solid var(--mc);
-      white-space: nowrap;
-      animation: popIn 0.2s ease;
-    }
-    @keyframes popIn {
-      from { transform: scale(0.8); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
-    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #loading p { color:#94a3b8; font-size:14px; }
   </style>
 </head>
 <body>
@@ -169,16 +160,34 @@
   <canvas id="proc"></canvas>
   <canvas id="overlay"></canvas>
 
-  <div id="header">
-    <div id="title-pill">ArUco マーカー検出</div>
+  <div id="header"><div id="title-pill">ArUco 計測</div></div>
+
+  <div id="settings">
+    <div class="set-row">
+      <span class="set-label">マーカーサイズ</span>
+      <input class="set-input" id="in-size" type="number" value="100" min="1" max="9999">
+      <span class="set-unit">mm</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">許容誤差</span>
+      <input class="set-input" id="in-tol-pos" type="number" value="10" min="0">
+      <span class="set-unit">px</span>
+      <span class="set-label">/ </span>
+      <input class="set-input" id="in-tol-ang" type="number" value="3" min="0">
+      <span class="set-unit">°</span>
+    </div>
   </div>
 
-  <div id="marker-list"></div>
-
-  <div id="status">
-    <span class="badge" id="fps-badge">-- FPS</span>
-    <span class="badge" id="count-badge">検出: 0</span>
-    <span class="badge" id="dict-badge" title="タップで辞書切替">ARUCO</span>
+  <div id="panel" class="collapsed">
+    <div id="panel-handle"></div>
+    <div id="marker-tabs"></div>
+    <div id="meas-content">
+      <p id="no-marker">マーカーを検出していません</p>
+    </div>
+    <div id="btn-row" style="display:none">
+      <button class="btn" id="btn-master">マスター登録</button>
+      <button class="btn" id="btn-clear">クリア</button>
+    </div>
   </div>
 
   <div id="loading">
@@ -187,185 +196,280 @@
   </div>
 
   <div id="splash" class="hidden">
-    <div class="splash-icon">⬛</div>
-    <h2>ArUco マーカー検出</h2>
+    <h2>ArUco 計測アプリ</h2>
     <p>
-      iPhoneのリアカメラでリアルタイムに<br>
-      ArUcoマーカーを検出します。<br><br>
-      マーカーIDをオーバーレイ表示します。
+      iPhoneのリアカメラでArUcoマーカーの<br>
+      位置・角度・傍きをリアルタイム計測します。<br><br>
+      マスター登録でズレを数値表示します。
     </p>
     <button id="start-btn">カメラを起動</button>
   </div>
 </div>
-
 <script>
-const video      = document.getElementById('video');
-const proc       = document.getElementById('proc');
-const overlay    = document.getElementById('overlay');
-const oc         = overlay.getContext('2d');
-const pc         = proc.getContext('2d', { willReadFrequently: true });
-const splash     = document.getElementById('splash');
-const loading    = document.getElementById('loading');
-const startBtn   = document.getElementById('start-btn');
-const fpsBadge   = document.getElementById('fps-badge');
-const cntBadge   = document.getElementById('count-badge');
-const dictBadge  = document.getElementById('dict-badge');
-const markerList = document.getElementById('marker-list');
+const video    = document.getElementById('video');
+const proc     = document.getElementById('proc');
+const overlay  = document.getElementById('overlay');
+const oc       = overlay.getContext('2d');
+const pc       = proc.getContext('2d', { willReadFrequently: true });
+const splash   = document.getElementById('splash');
+const loading  = document.getElementById('loading');
+const panel    = document.getElementById('panel');
+const handle   = document.getElementById('panel-handle');
+const tabs     = document.getElementById('marker-tabs');
+const content  = document.getElementById('meas-content');
+const btnRow   = document.getElementById('btn-row');
+const btnMaster = document.getElementById('btn-master');
+const btnClear  = document.getElementById('btn-clear');
+const inSize   = document.getElementById('in-size');
+const inTolPos = document.getElementById('in-tol-pos');
+const inTolAng = document.getElementById('in-tol-ang');
 
-const DICTIONARIES = ['ARUCO', 'ARUCO_MIP_36h12'];
-let dictIdx = 0;
-let detector = null;
-let running  = false;
-let frameCount = 0, lastFpsTime = performance.now();
-
-const PALETTE = [
-  '#4ade80','#fb923c','#38bdf8','#f9a8d4',
-  '#a78bfa','#fbbf24','#f87171','#34d399',
-];
+const PALETTE = ['#4ade80','#fb923c','#38bdf8','#f9a8d4','#a78bfa','#fbbf24','#f87171','#34d399'];
 function colorFor(id) { return PALETTE[id % PALETTE.length]; }
 
-function waitForLib(cb) {
-  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') {
-    cb();
-  } else {
-    setTimeout(() => waitForLib(cb), 100);
-  }
-}
+let detector = null, running = false, selectedId = null, lastMarkers = [];
+const masters = {};
 
+function waitForLib(cb) {
+  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') cb();
+  else setTimeout(() => waitForLib(cb), 100);
+}
 waitForLib(() => {
   loading.classList.add('hidden');
   splash.classList.remove('hidden');
   detector = new AR.Detector();
 });
 
-dictBadge.addEventListener('click', () => {
-  if (!detector) return;
-  dictIdx = (dictIdx + 1) % DICTIONARIES.length;
-  dictBadge.textContent = DICTIONARIES[dictIdx];
-});
-
-startBtn.addEventListener('click', startCamera);
-
+document.getElementById('start-btn').addEventListener('click', startCamera);
 async function startCamera() {
   splash.classList.add('hidden');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 },
-      }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
     });
     video.srcObject = stream;
-    video.addEventListener('loadedmetadata', onVideoReady, { once: true });
-  } catch (err) {
+    video.addEventListener('loadedmetadata', () => {
+      proc.width = overlay.width = video.videoWidth || 640;
+      proc.height = overlay.height = video.videoHeight || 480;
+      running = true; requestAnimationFrame(loop);
+    }, { once: true });
+  } catch(e) {
     splash.classList.remove('hidden');
-    document.querySelector('#splash p').innerHTML =
-      'カメラへのアクセスが拒否されました。<br>設定 → Safari → カメラ を「許可」にしてください。';
-    startBtn.textContent = '再試行';
+    document.querySelector('#splash p').innerHTML = 'カメラへのアクセスが拒否されました。<br>設定 → Safari → カメラ を「許可」にしてください。';
+    document.getElementById('start-btn').textContent = '再試行';
   }
 }
 
-function onVideoReady() {
-  const vw = video.videoWidth  || 640;
-  const vh = video.videoHeight || 480;
-  proc.width    = vw; proc.height    = vh;
-  overlay.width = vw; overlay.height = vh;
-  running = true;
-  requestAnimationFrame(loop);
-}
+handle.addEventListener('click', () => panel.classList.toggle('collapsed'));
 
-function loop() {
-  if (!running || video.readyState < 2) { requestAnimationFrame(loop); return; }
+btnMaster.addEventListener('click', () => {
+  if (selectedId === null) return;
+  const m = lastMarkers.find(m => m.id === selectedId);
+  if (!m) return;
+  masters[selectedId] = { ...m.meas };
+  btnMaster.textContent = 'マスター更新';
+  btnMaster.classList.add('has-master');
+  updatePanel();
+});
 
-  pc.drawImage(video, 0, 0, proc.width, proc.height);
-  const imageData = pc.getImageData(0, 0, proc.width, proc.height);
+btnClear.addEventListener('click', () => {
+  if (selectedId === null) return;
+  delete masters[selectedId];
+  btnMaster.textContent = 'マスター登録';
+  btnMaster.classList.remove('has-master');
+  updatePanel();
+});
 
-  let markers = [];
-  try { markers = detector.detect(imageData); } catch(e) {}
-
-  oc.clearRect(0, 0, overlay.width, overlay.height);
-  markers.forEach(drawMarker);
-  updateMarkerList(markers);
-
-  frameCount++;
-  const now = performance.now();
-  if (now - lastFpsTime > 600) {
-    const fps = (frameCount / ((now - lastFpsTime) / 1000)).toFixed(1);
-    fpsBadge.textContent = `${fps} FPS`;
-    cntBadge.textContent = `検出: ${markers.length}`;
-    frameCount = 0;
-    lastFpsTime = now;
-  }
-
-  requestAnimationFrame(loop);
-}
-
-function drawMarker(marker) {
+function measure(marker) {
   const corners = marker.corners;
-  if (!corners || corners.length < 4) return;
+  const W = proc.width, H = proc.height;
+  const rawCx = corners.reduce((s,c) => s + c.x, 0) / 4;
+  const rawCy = corners.reduce((s,c) => s + c.y, 0) / 4;
+  const cx = rawCx - W/2, cy = rawCy - H/2;
+  const ex = corners[1].x - corners[0].x, ey = corners[1].y - corners[0].y;
+  const angle = Math.atan2(ey, ex) * 180 / Math.PI;
+  let perimeter = 0;
+  for (let i = 0; i < 4; i++) { const a=corners[i],b=corners[(i+1)%4]; perimeter+=Math.hypot(b.x-a.x,b.y-a.y); }
+  const sideLen = perimeter/4;
+  const sizeMm = parseFloat(inSize.value)||0;
+  const scale = sizeMm>0 ? sideLen/sizeMm : null;
+  let pitch=null,roll=null,yaw3d=null,distCm=null,pose=null;
+  if (sizeMm>0 && typeof POS !== 'undefined') {
+    try {
+      const focalLength = W*0.8;
+      const posit = new POS.Posit(sizeMm, focalLength);
+      const imgPts = corners.map(c => ({ x: c.x-W/2, y: -(c.y-H/2) }));
+      pose = posit.pose(imgPts);
+      const R=pose.bestRotation, T=pose.bestTranslation;
+      pitch  = Math.atan2(-R[2][0], Math.sqrt(R[2][1]**2+R[2][2]**2))*180/Math.PI;
+      roll   = Math.atan2(R[2][1], R[2][2])*180/Math.PI;
+      yaw3d  = Math.atan2(R[1][0], R[0][0])*180/Math.PI;
+      distCm = Math.abs(T[2])/10;
+    } catch(e){}
+  }
+  return { cx,cy,angle,pitch,roll,yaw3d,distCm,scale,sideLen,pose,rawCx,rawCy };
+}
 
-  const color = colorFor(marker.id);
-  const sx = overlay.width  / proc.width;
-  const sy = overlay.height / proc.height;
-  const pts = corners.map(c => [c.x * sx, c.y * sy]);
+let lastPanel=0;
+function loop() {
+  if (!running || video.readyState<2) { requestAnimationFrame(loop); return; }
+  pc.drawImage(video,0,0,proc.width,proc.height);
+  const imageData = pc.getImageData(0,0,proc.width,proc.height);
+  let detected=[];
+  try { detected = detector.detect(imageData); } catch(e){}
+  lastMarkers = detected.map(m => ({...m, meas: measure(m)}));
+  oc.clearRect(0,0,overlay.width,overlay.height);
+  const sx=overlay.width/proc.width, sy=overlay.height/proc.height;
+  for (const m of lastMarkers) drawMarkerOverlay(m,sx,sy);
+  const now=performance.now();
+  if (now-lastPanel>100) { lastPanel=now; updatePanel(); }
+  requestAnimationFrame(loop);
+}
 
-  oc.beginPath();
-  oc.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < 4; i++) oc.lineTo(pts[i][0], pts[i][1]);
-  oc.closePath();
-  oc.fillStyle   = color + '28';
-  oc.strokeStyle = color;
-  oc.lineWidth   = 3;
-  oc.fill();
-  oc.stroke();
-
-  pts.forEach(([x,y]) => {
+function drawMarkerOverlay(m,sx,sy) {
+  const corners=m.corners, color=colorFor(m.id), meas=m.meas;
+  const master=masters[m.id];
+  const tolPos=parseFloat(inTolPos.value)||10, tolAng=parseFloat(inTolAng.value)||3;
+  let statusColor=color;
+  if (master) {
+    const dPos=Math.hypot(meas.cx-master.cx, meas.cy-master.cy);
+    const dAng=Math.abs(angleDiff(meas.angle,master.angle));
+    if (dPos>tolPos*2||dAng>tolAng*2) statusColor='#f87171';
+    else if (dPos>tolPos||dAng>tolAng) statusColor='#fbbf24';
+    else statusColor='#4ade80';
+  }
+  const pts=corners.map(c=>[c.x*sx,c.y*sy]);
+  if (master) {
+    const offX=(master.cx-meas.cx)*sx, offY=(master.cy-meas.cy)*sy;
     oc.beginPath();
-    oc.arc(x, y, 7, 0, Math.PI * 2);
-    oc.fillStyle = color;
-    oc.fill();
-    oc.strokeStyle = '#000';
-    oc.lineWidth = 1.5;
-    oc.stroke();
+    oc.moveTo(pts[0][0]+offX,pts[0][1]+offY);
+    for (let i=1;i<4;i++) oc.lineTo(pts[i][0]+offX,pts[i][1]+offY);
+    oc.closePath();
+    oc.strokeStyle='rgba(255,255,255,0.35)'; oc.setLineDash([6,4]); oc.lineWidth=2; oc.stroke(); oc.setLineDash([]);
+    drawArrow(meas.rawCx*sx, meas.rawCy*sy, master.rawCx*sx, master.rawCy*sy, statusColor);
+  }
+  oc.beginPath();
+  oc.moveTo(pts[0][0],pts[0][1]);
+  for (let i=1;i<4;i++) oc.lineTo(pts[i][0],pts[i][1]);
+  oc.closePath();
+  oc.strokeStyle=statusColor; oc.lineWidth=3; oc.fillStyle=statusColor+'1a'; oc.fill(); oc.stroke();
+  pts.forEach(([x,y],i) => {
+    oc.beginPath(); oc.arc(x,y,7,0,Math.PI*2);
+    oc.fillStyle=i===0?'#fff':statusColor; oc.strokeStyle='#000'; oc.lineWidth=1.5; oc.fill(); oc.stroke();
   });
-
-  const cx = pts.reduce((s,p) => s + p[0], 0) / 4;
-  const cy = pts.reduce((s,p) => s + p[1], 0) / 4;
-  const label = `ID: ${marker.id}`;
-  oc.font = 'bold 20px -apple-system, sans-serif';
-  oc.textAlign = 'center';
-  oc.textBaseline = 'middle';
-  const tw = oc.measureText(label).width + 20;
-  const th = 32;
-  oc.fillStyle = 'rgba(0,0,0,0.68)';
-  roundRect(oc, cx - tw/2, cy - th/2, tw, th, 8);
-  oc.fill();
-  oc.fillStyle = '#fff';
-  oc.fillText(label, cx, cy);
+  if (meas.pose) drawAxes(meas,sx,sy);
+  const cx=pts.reduce((s,p)=>s+p[0],0)/4, cy=pts.reduce((s,p)=>s+p[1],0)/4;
+  const label=`ID: ${m.id}`;
+  oc.font='bold 18px -apple-system,sans-serif'; oc.textAlign='center'; oc.textBaseline='middle';
+  const tw=oc.measureText(label).width+18;
+  oc.fillStyle='rgba(0,0,0,0.7)'; roundRect(oc,cx-tw/2,cy-16,tw,30,6); oc.fill();
+  oc.fillStyle='#fff'; oc.fillText(label,cx,cy);
 }
 
-function updateMarkerList(markers) {
-  markerList.innerHTML = '';
-  markers.forEach(m => {
-    const tag = document.createElement('div');
-    tag.className = 'marker-tag';
-    tag.style.setProperty('--mc', colorFor(m.id));
-    tag.textContent = `ID ${m.id}`;
-    markerList.appendChild(tag);
-  });
+function drawAxes(meas,sx,sy) {
+  const R=meas.pose.bestRotation, T=meas.pose.bestTranslation;
+  const W=proc.width, H=proc.height, focalLength=W*0.8;
+  const half=(parseFloat(inSize.value)||100)*0.6;
+  function project(x,y,z) {
+    const rx=R[0][0]*x+R[0][1]*y+R[0][2]*z+T[0];
+    const ry=R[1][0]*x+R[1][1]*y+R[1][2]*z+T[1];
+    const rz=R[2][0]*x+R[2][1]*y+R[2][2]*z+T[2];
+    return [(rx/rz)*focalLength*sx+overlay.width/2, -(ry/rz)*focalLength*sx+overlay.height/2];
+  }
+  const o=project(0,0,0), xa=project(half,0,0), ya=project(0,half,0), za=project(0,0,-half);
+  drawAxisArrow(o,xa,'#ff4444','X'); drawAxisArrow(o,ya,'#44ff44','Y'); drawAxisArrow(o,za,'#4488ff','Z');
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x+w, y,   x+w, y+h, r);
-  ctx.arcTo(x+w, y+h, x,   y+h, r);
-  ctx.arcTo(x,   y+h, x,   y,   r);
-  ctx.arcTo(x,   y,   x+w, y,   r);
-  ctx.closePath();
+function drawAxisArrow([ox,oy],[tx,ty],color,label) {
+  oc.beginPath(); oc.moveTo(ox,oy); oc.lineTo(tx,ty);
+  oc.strokeStyle=color; oc.lineWidth=2.5; oc.stroke();
+  oc.beginPath(); oc.arc(tx,ty,4,0,Math.PI*2); oc.fillStyle=color; oc.fill();
+  oc.font='bold 12px -apple-system,sans-serif'; oc.fillStyle=color;
+  oc.textAlign='center'; oc.textBaseline='middle';
+  oc.fillText(label, tx+(tx-ox)*0.15, ty+(ty-oy)*0.15);
+}
+
+function drawArrow(x1,y1,x2,y2,color) {
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);
+  if (len<5) return;
+  oc.beginPath(); oc.moveTo(x1,y1); oc.lineTo(x2,y2);
+  oc.strokeStyle=color; oc.lineWidth=2; oc.stroke();
+  const a=Math.atan2(dy,dx);
+  oc.beginPath(); oc.moveTo(x2,y2);
+  oc.lineTo(x2-12*Math.cos(a-0.4),y2-12*Math.sin(a-0.4));
+  oc.lineTo(x2-12*Math.cos(a+0.4),y2-12*Math.sin(a+0.4));
+  oc.closePath(); oc.fillStyle=color; oc.fill();
+}
+
+function roundRect(ctx,x,y,w,h,r) {
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+function updatePanel() {
+  const ids=lastMarkers.map(m=>m.id);
+  if (!ids.includes(selectedId)&&ids.length>0) selectedId=ids[0];
+  if (ids.length===0) selectedId=null;
+  tabs.innerHTML='';
+  for (const m of lastMarkers) {
+    const tab=document.createElement('div');
+    tab.className='m-tab'+(m.id===selectedId?' active':'');
+    tab.style.setProperty('--tc',colorFor(m.id));
+    tab.textContent=`ID ${m.id}`;
+    tab.addEventListener('click',()=>{selectedId=m.id;updatePanel();});
+    tabs.appendChild(tab);
+  }
+  const m=lastMarkers.find(m=>m.id===selectedId);
+  if (!m) { content.innerHTML='<p id="no-marker">マーカーを検出していません</p>'; btnRow.style.display='none'; panel.classList.add('collapsed'); return; }
+  panel.classList.remove('collapsed'); btnRow.style.display='flex';
+  const meas=m.meas, master=masters[m.id];
+  const tolPos=parseFloat(inTolPos.value)||10, tolAng=parseFloat(inTolAng.value)||3;
+  if (master) { btnMaster.textContent='マスター更新'; btnMaster.classList.add('has-master'); }
+  else { btnMaster.textContent='マスター登録'; btnMaster.classList.remove('has-master'); }
+  if (master) { master.rawCx=master.rawCx??(master.cx+proc.width/2); master.rawCy=master.rawCy??(master.cy+proc.height/2); }
+  const fmt1=v=>v==null?'--':v.toFixed(1), fmt0=v=>v==null?'--':Math.round(v);
+  function devClass(dev,tol) { if (dev==null) return ''; const a=Math.abs(dev); return a<=tol?'good':a<=tol*2?'warn':'bad'; }
+  let dX=null,dY=null,dAng=null,dPitch=null,dRoll=null;
+  if (master) {
+    dX=meas.cx-master.cx; dY=meas.cy-master.cy;
+    dAng=angleDiff(meas.angle,master.angle);
+    dPitch=meas.pitch!=null&&master.pitch!=null?meas.pitch-master.pitch:null;
+    dRoll=meas.roll!=null&&master.roll!=null?meas.roll-master.roll:null;
+  }
+  content.innerHTML=`
+    <div id="meas-grid">
+      <div class="meas-card">
+        <h4>現在の位置</h4>
+        <div class="meas-row"><span class="meas-key">X（画面中心から）</span><span class="meas-val">${fmt0(meas.cx)} px</span></div>
+        <div class="meas-row"><span class="meas-key">Y（画面中心から）</span><span class="meas-val">${fmt0(meas.cy)} px</span></div>
+        ${meas.scale?`<div class="meas-row"><span class="meas-key">スケール</span><span class="meas-val">${meas.scale.toFixed(2)} px/mm</span></div>`:''}
+      </div>
+      <div class="meas-card">
+        <h4>姿勢</h4>
+        <div class="meas-row"><span class="meas-key">面内角度</span><span class="meas-val">${fmt1(meas.angle)}°</span></div>
+        <div class="meas-row"><span class="meas-key">ピッチ</span><span class="meas-val">${fmt1(meas.pitch)}°</span></div>
+        <div class="meas-row"><span class="meas-key">ロール</span><span class="meas-val">${fmt1(meas.roll)}°</span></div>
+        ${meas.distCm!=null?`<div class="meas-row"><span class="meas-key">距離</span><span class="meas-val">${fmt1(meas.distCm)} cm</span></div>`:''}
+      </div>
+      ${master?`
+      <div class="meas-card full">
+        <h4>マスターからのズレ</h4>
+        <div class="meas-row"><span class="meas-key">ΔX</span><span class="meas-val ${devClass(dX,tolPos)}">${dX>=0?'+':''}${fmt0(dX)} px</span></div>
+        <div class="meas-row"><span class="meas-key">ΔY</span><span class="meas-val ${devClass(dY,tolPos)}">${dY>=0?'+':''}${fmt0(dY)} px</span></div>
+        <div class="meas-row"><span class="meas-key">Δ面内角度</span><span class="meas-val ${devClass(dAng,tolAng)}">${dAng>=0?'+':''}${fmt1(dAng)}°</span></div>
+        ${dPitch!=null?`<div class="meas-row"><span class="meas-key">Δピッチ</span><span class="meas-val ${devClass(dPitch,tolAng)}">${dPitch>=0?'+':''}${fmt1(dPitch)}°</span></div>`:''}
+        ${dRoll!=null?`<div class="meas-row"><span class="meas-key">Δロール</span><span class="meas-val ${devClass(dRoll,tolAng)}">${dRoll>=0?'+':''}${fmt1(dRoll)}°</span></div>`:''}
+      </div>`:''}
+    </div>`;
+}
+
+function angleDiff(a,b) {
+  let d=a-b;
+  while (d>180) d-=360;
+  while (d<-180) d+=360;
+  return d;
 }
 </script>
 </body>
