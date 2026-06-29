@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ArUco マーカー検出</title>
+
+  <!-- js-aruco: MIT License, jcmellado/js-aruco -->
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --safe-top:    env(safe-area-inset-top, 12px);
+      --safe-bottom: env(safe-area-inset-bottom, 16px);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    }
+
+    #container {
+      position: relative;
+      width: 100%; height: 100%;
+    }
+
+    video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+
+    canvas#overlay {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+
+    /* Hidden processing canvas */
+    canvas#proc { display: none; }
+
+    /* ── Header pill ── */
+    #header {
+      position: absolute;
+      top: var(--safe-top);
+      left: 50%; transform: translateX(-50%);
+      margin-top: 12px;
+      z-index: 10;
+    }
+    #title-pill {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      color: #fff;
+      font-size: 15px; font-weight: 600;
+      padding: 8px 20px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    /* ── Status bar ── */
+    #status {
+      position: absolute;
+      bottom: calc(var(--safe-bottom) + 10px);
+      left: 16px; right: 16px;
+      display: flex; gap: 8px; align-items: center;
+      z-index: 10;
+    }
+    .badge {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      color: #fff;
+      font-size: 12px; font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    #fps-badge { color: #4ade80; }
+    #dict-badge { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+    /* ── Permission / loading overlay ── */
+    #splash {
+      position: absolute; inset: 0;
+      background: #000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; padding: 40px;
+      z-index: 20;
+    }
+    #splash.hidden { display: none; }
+
+    .splash-icon {
+      width: 80px; height: 80px;
+      border: 3px solid #4ade80;
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px;
+    }
+    #splash h2 { color: #fff; font-size: 22px; font-weight: 700; text-align: center; }
+    #splash p  { color: #94a3b8; font-size: 14px; line-height: 1.65; text-align: center; }
+
+    #start-btn {
+      background: #4ade80;
+      color: #000;
+      border: none;
+      border-radius: 14px;
+      padding: 15px 40px;
+      font-size: 17px; font-weight: 700;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s;
+    }
+    #start-btn:active { transform: scale(0.96); }
+
+    /* ── Loading spinner ── */
+    #loading {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; z-index: 30;
+    }
+    #loading.hidden { display: none; }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #4ade80;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: #94a3b8; font-size: 14px; }
+
+    /* ── Detected marker list ── */
+    #marker-list {
+      position: absolute;
+      top: calc(var(--safe-top) + 60px);
+      right: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+      z-index: 10;
+      max-height: 60vh;
+      overflow: hidden;
+    }
+    .marker-tag {
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 12px;
+      padding: 6px 12px;
+      font-size: 13px; font-weight: 700;
+      color: #fff;
+      border-left: 4px solid var(--mc);
+      white-space: nowrap;
+      animation: popIn 0.2s ease;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.8); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+
+  <!-- Camera feed -->
+  <video id="video" autoplay playsinline muted></video>
+
+  <!-- Hidden canvas for frame capture -->
+  <canvas id="proc"></canvas>
+
+  <!-- Overlay canvas for drawing -->
+  <canvas id="overlay"></canvas>
+
+  <!-- Header -->
+  <div id="header">
+    <div id="title-pill">ArUco マーカー検出</div>
+  </div>
+
+  <!-- Detected marker tags (right side) -->
+  <div id="marker-list"></div>
+
+  <!-- Status bar -->
+  <div id="status">
+    <span class="badge" id="fps-badge">-- FPS</span>
+    <span class="badge" id="count-badge">検出: 0</span>
+    <span class="badge" id="dict-badge" title="タップで辞書切替">ARUCO</span>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>ライブラリを読み込み中…</p>
+  </div>
+
+  <!-- Start screen -->
+  <div id="splash" class="hidden">
+    <div class="splash-icon">⬛</div>
+    <h2>ArUco マーカー検出</h2>
+    <p>
+      iPhoneのリアカメラでリアルタイムに<br>
+      ArUcoマーカーを検出します。<br><br>
+      マーカーIDをオーバーレイ表示します。
+    </p>
+    <button id="start-btn">カメラを起動</button>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const video      = document.getElementById('video');
+const proc       = document.getElementById('proc');
+const overlay    = document.getElementById('overlay');
+const oc         = overlay.getContext('2d');
+const pc         = proc.getContext('2d', { willReadFrequently: true });
+const splash     = document.getElementById('splash');
+const loading    = document.getElementById('loading');
+const startBtn   = document.getElementById('start-btn');
+const fpsBadge   = document.getElementById('fps-badge');
+const cntBadge   = document.getElementById('count-badge');
+const dictBadge  = document.getElementById('dict-badge');
+const markerList = document.getElementById('marker-list');
+
+const DICTIONARIES = ['ARUCO', 'ARUCO_MIP_36h12'];
+let dictIdx = 0;
+let detector = null;
+let running  = false;
+let frameCount = 0, lastFpsTime = performance.now();
+
+// Palette for marker IDs
+const PALETTE = [
+  '#4ade80','#fb923c','#38bdf8','#f9a8d4',
+  '#a78bfa','#fbbf24','#f87171','#34d399',
+];
+function colorFor(id) { return PALETTE[id % PALETTE.length]; }
+
+// ─────────────────────────────────────────────
+// Library readiness
+// ─────────────────────────────────────────────
+function waitForLib(cb) {
+  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') {
+    cb();
+  } else {
+    setTimeout(() => waitForLib(cb), 100);
+  }
+}
+
+waitForLib(() => {
+  loading.classList.add('hidden');
+  splash.classList.remove('hidden');
+  detector = new AR.Detector();
+});
+
+// Dict cycle
+dictBadge.addEventListener('click', () => {
+  if (!detector) return;
+  dictIdx = (dictIdx + 1) % DICTIONARIES.length;
+  const name = DICTIONARIES[dictIdx];
+  dictBadge.textContent = name;
+  // Re-create detector (dict baked in constructor for js-aruco)
+});
+
+// ─────────────────────────────────────────────
+// Camera
+// ─────────────────────────────────────────────
+startBtn.addEventListener('click', startCamera);
+
+async function startCamera() {
+  splash.classList.add('hidden');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
+      }
+    });
+    video.srcObject = stream;
+    video.addEventListener('loadedmetadata', onVideoReady, { once: true });
+  } catch (err) {
+    splash.classList.remove('hidden');
+    document.querySelector('#splash p').innerHTML =
+      'カメラへのアクセスが拒否されました。<br>設定 → Safari → カメラ を「許可」にしてください。';
+    startBtn.textContent = '再試行';
+  }
+}
+
+function onVideoReady() {
+  const vw = video.videoWidth  || 640;
+  const vh = video.videoHeight || 480;
+  proc.width    = vw; proc.height    = vh;
+  overlay.width = vw; overlay.height = vh;
+  running = true;
+  requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────
+// Detection loop
+// ─────────────────────────────────────────────
+function loop() {
+  if (!running || video.readyState < 2) { requestAnimationFrame(loop); return; }
+
+  // Capture frame
+  pc.drawImage(video, 0, 0, proc.width, proc.height);
+  const imageData = pc.getImageData(0, 0, proc.width, proc.height);
+
+  // Detect
+  let markers = [];
+  try { markers = detector.detect(imageData); } catch(e) {}
+
+  // Draw on overlay
+  oc.clearRect(0, 0, overlay.width, overlay.height);
+  markers.forEach(drawMarker);
+
+  // Update sidebar list
+  updateMarkerList(markers);
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime > 600) {
+    const fps = (frameCount / ((now - lastFpsTime) / 1000)).toFixed(1);
+    fpsBadge.textContent = `${fps} FPS`;
+    cntBadge.textContent = `検出: ${markers.length}`;
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────
+// Drawing
+// ─────────────────────────────────────────────
+function drawMarker(marker) {
+  const corners = marker.corners;
+  if (!corners || corners.length < 4) return;
+
+  const color = colorFor(marker.id);
+
+  // Scale corners to overlay canvas
+  const sx = overlay.width  / proc.width;
+  const sy = overlay.height / proc.height;
+  const pts = corners.map(c => [c.x * sx, c.y * sy]);
+
+  // Polygon fill
+  oc.beginPath();
+  oc.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < 4; i++) oc.lineTo(pts[i][0], pts[i][1]);
+  oc.closePath();
+  oc.fillStyle   = color + '28';
+  oc.strokeStyle = color;
+  oc.lineWidth   = 3;
+  oc.fill();
+  oc.stroke();
+
+  // Corner circles
+  pts.forEach(([x,y]) => {
+    oc.beginPath();
+    oc.arc(x, y, 7, 0, Math.PI * 2);
+    oc.fillStyle = color;
+    oc.fill();
+    oc.strokeStyle = '#000';
+    oc.lineWidth = 1.5;
+    oc.stroke();
+  });
+
+  // Center label
+  const cx = pts.reduce((s,p) => s + p[0], 0) / 4;
+  const cy = pts.reduce((s,p) => s + p[1], 0) / 4;
+  const label = `ID: ${marker.id}`;
+  oc.font = 'bold 20px -apple-system, sans-serif';
+  oc.textAlign = 'center';
+  oc.textBaseline = 'middle';
+  const tw = oc.measureText(label).width + 20;
+  const th = 32;
+  // Pill background
+  oc.fillStyle = 'rgba(0,0,0,0.68)';
+  roundRect(oc, cx - tw/2, cy - th/2, tw, th, 8);
+  oc.fill();
+  oc.fillStyle = '#fff';
+  oc.fillText(label, cx, cy);
+}
+
+function updateMarkerList(markers) {
+  markerList.innerHTML = '';
+  markers.forEach(m => {
+    const tag = document.createElement('div');
+    tag.className = 'marker-tag';
+    tag.style.setProperty('--mc', colorFor(m.id));
+    tag.textContent = `ID ${m.id}`;
+    markerList.appendChild(tag);
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+}
+</script>
+</body>
+</html>
