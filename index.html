@@ -160,12 +160,32 @@
     }
 
     .hidden { display: none; }
+
+    .app-link {
+      display: block;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .app-link a {
+      display: inline-block;
+      background: #1e293b;
+      color: #4ade80;
+      text-decoration: none;
+      border-radius: 10px;
+      padding: 9px 22px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 1px solid #334155;
+    }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>🍻 割り勘計算</h1>
   <p class="subtitle">飲み会・経費精算ツール</p>
+  <div class="app-link">
+    <a href="aruco.html">⬛ ArUco マーカー検出アプリ →</a>
+  </div>
 
   <!-- 基本情報 -->
   <div class="card">
@@ -276,7 +296,6 @@
     const total = parseFloat(inTotal.value);
     const count = parseInt(inCount.value);
 
-    // 合計・人数が未入力
     if (!total || total <= 0 || !count || count < 1) {
       bossHint.textContent = '';
       emptyMsg.classList.remove('hidden');
@@ -287,7 +306,6 @@
     const equal = Math.round(total / count);
     bossHint.textContent = `均等割りの場合: ${fmt(equal)} ／ 合計: ${fmt(total)}`;
 
-    // 上司金額（未入力なら均等割りをデフォルトに）
     let bossAmt = parseFloat(bossInput.value);
     if (isNaN(bossAmt) || bossInput.value === '') {
       emptyMsg.classList.remove('hidden');
@@ -295,12 +313,10 @@
       return;
     }
 
-    // バリデーション
     if (bossAmt < 0) bossAmt = 0;
     if (bossAmt > total) bossAmt = total;
     const bossInt = Math.round(bossAmt);
 
-    // 1人の場合
     if (count === 1) {
       emptyMsg.classList.add('hidden');
       resultContent.classList.remove('hidden');
