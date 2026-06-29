@@ -78,7 +78,7 @@
 
     /* ── Status badges (always visible) ── */
     #badges {
-      position: absolute; bottom: calc(var(--safe-bottom) + 280px);
+      position: absolute; bottom: calc(var(--safe-bottom) + 70px);
       left: 12px; display: flex; gap: 6px; z-index: 20;
     }
     .badge {
@@ -262,8 +262,10 @@
           <p>
             ArUcoマーカーをカメラに向けると<br>
             ここに計測値が表示されます。<br><br>
+            マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
+            ディクショナリで生成してください。<br><br>
             <a href="https://chev.me/arucogen/" target="_blank">
-              ▶ ARUCOマーカーを生成する（ブラウザで開く）
+              ▶ マーカー生成サイト（Original ArUco を選択）
             </a>
           </p>
         </div>
@@ -294,7 +296,11 @@
     <p>
       iPhoneのリアカメラでArUcoマーカーの<br>
       位置・角度・傾きをリアルタイム計測します。<br><br>
-      マスター登録でズレを数値確認できます。
+      マスター登録でズレを数値確認できます。<br><br>
+      <span style="font-size:12px;color:#4ade80;font-weight:700;">
+        ⚠ マーカーは必ず「Original ArUco」<br>
+        ディクショナリで作成してください
+      </span>
     </p>
     <button id="start-btn">カメラを起動</button>
   </div>
@@ -373,7 +379,7 @@ handleRow.addEventListener('click', () => {
   panel.classList.toggle('mini', !panelOpen);
   panelTitle.classList.remove('has-marker');
   panelTitle.textContent = panelOpen ? '計測パネル ↓' : '計測パネルを開く ↑';
-  badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 280px)';
+  badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 70px)';
 });
 
 // ───────────────────────────────────────────
@@ -400,6 +406,11 @@ async function startCamera() {
       proc.width  = overlay.width  = vw;
       proc.height = overlay.height = vh;
       running = true;
+      // Open panel immediately so user can see the measurement area
+      panelOpen = true;
+      panel.classList.remove('mini');
+      panelTitle.textContent = '計測パネル ↓';
+      badges.style.bottom = 'calc(60vh + 10px)';
       requestAnimationFrame(loop);
     }, { once: true });
   } catch (e) {
@@ -519,13 +530,9 @@ function loop() {
     lastFpsTime = now;
   }
 
-  // Auto-open panel on first marker detection
-  if (lastMarkers.length > 0 && !panelOpen) {
-    panelOpen = true;
-    panel.classList.remove('mini');
-    panelTitle.textContent = '計測パネル ↓';
+  // Pulse panel title on first marker detection
+  if (lastMarkers.length > 0 && !panelTitle.classList.contains('has-marker')) {
     panelTitle.classList.add('has-marker');
-    badges.style.bottom = 'calc(60vh + 10px)';
   }
 
   // Panel update at ~10 fps
@@ -697,8 +704,10 @@ function renderPanel() {
         <p>
           ArUcoマーカーをカメラに向けると<br>
           ここに計測値が表示されます。<br><br>
+          マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
+          ディクショナリで生成してください。<br><br>
           <a href="https://chev.me/arucogen/" target="_blank">
-            ▶ ARUCOマーカーを生成する
+            ▶ マーカー生成サイト（Original ArUco を選択）
           </a>
         </p>
       </div>`;
