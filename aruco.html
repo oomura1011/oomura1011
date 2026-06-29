@@ -110,19 +110,20 @@
 
     /* Handle */
     #handle-row {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; justify-content: center;
       padding: 10px 14px 8px; cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      gap: 8px;
     }
     #handle-bar {
       width: 36px; height: 4px; background: #334155; border-radius: 2px;
-      margin: 0 auto;
     }
     #panel-title {
       font-size: 13px; font-weight: 700; color: #94a3b8;
-      position: absolute; left: 50%; transform: translateX(-50%);
       white-space: nowrap;
     }
+    #panel-title.has-marker { color: #4ade80; animation: pulse 1.5s ease-in-out 3; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     /* Marker tabs */
     #marker-tabs {
@@ -251,8 +252,8 @@
   <!-- Measurement panel -->
   <div id="panel" class="mini">
     <div id="handle-row">
+      <span id="panel-title">計測パネルを開く ↑</span>
       <div id="handle-bar"></div>
-      <span id="panel-title">計測パネル ↑</span>
     </div>
     <div id="panel-inner">
       <div id="marker-tabs"></div>
@@ -370,8 +371,8 @@ waitForLib(() => {
 handleRow.addEventListener('click', () => {
   panelOpen = !panelOpen;
   panel.classList.toggle('mini', !panelOpen);
-  panelTitle.textContent = panelOpen ? '計測パネル ↓' : '計測パネル ↑';
-  // Adjust badges position
+  panelTitle.classList.remove('has-marker');
+  panelTitle.textContent = panelOpen ? '計測パネル ↓' : '計測パネルを開く ↑';
   badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 280px)';
 });
 
@@ -516,6 +517,15 @@ function loop() {
     badgeCnt.textContent = `検出: ${lastMarkers.length}`;
     frameCount = 0;
     lastFpsTime = now;
+  }
+
+  // Auto-open panel on first marker detection
+  if (lastMarkers.length > 0 && !panelOpen) {
+    panelOpen = true;
+    panel.classList.remove('mini');
+    panelTitle.textContent = '計測パネル ↓';
+    panelTitle.classList.add('has-marker');
+    badges.style.bottom = 'calc(60vh + 10px)';
   }
 
   // Panel update at ~10 fps
