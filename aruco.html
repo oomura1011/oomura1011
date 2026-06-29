@@ -7,10 +7,24 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>ArUco 計測</title>
 
-  <!-- js-aruco (posit1 は外部依存なし) -->
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/posit1.js"></script>
+  <!-- js-aruco via jsDelivr CDN -->
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"
+    onerror="showLibError('cv.js')"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"
+    onerror="showLibError('aruco.js')"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/posit1.js"
+    onerror="showLibError('posit1.js')"></script>
+  <script>
+    function showLibError(file) {
+      var el = document.getElementById('loading-msg');
+      if (el) {
+        el.textContent = file + ' の読み込みに失敗しました。Wi-Fiまたはモバイル通信を確認して「再読み込み」をタップしてください。';
+        el.style.color = '#f87171';
+      }
+      var btn = document.getElementById('reload-btn');
+      if (btn) btn.style.display = 'block';
+    }
+  </script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -265,7 +279,12 @@
   <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
-    <p>ライブラリを読み込み中…</p>
+    <p id="loading-msg">ライブラリを読み込み中…</p>
+    <button id="reload-btn" onclick="location.reload()"
+      style="display:none;margin-top:12px;background:#4ade80;color:#000;border:none;
+             border-radius:12px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;">
+      再読み込み
+    </button>
   </div>
 
   <!-- Splash -->
@@ -324,9 +343,18 @@ let frameCount = 0, lastFpsTime = performance.now();
 // ───────────────────────────────────────────
 // Library init
 // ───────────────────────────────────────────
-function waitForLib(cb) {
-  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') cb();
-  else setTimeout(() => waitForLib(cb), 100);
+const loadingMsg  = document.getElementById('loading-msg');
+const reloadBtn   = document.getElementById('reload-btn');
+
+function waitForLib(cb, deadline) {
+  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') { cb(); return; }
+  if (performance.now() > deadline) {
+    loadingMsg.textContent = 'ライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。';
+    loadingMsg.style.color = '#f87171';
+    reloadBtn.style.display = 'block';
+    return;
+  }
+  setTimeout(() => waitForLib(cb, deadline), 200);
 }
 waitForLib(() => {
   loading.classList.add('hidden');
@@ -334,7 +362,7 @@ waitForLib(() => {
   detector = new AR.Detector();
   badgeLib.textContent = 'ライブラリOK';
   badgeLib.style.color = '#4ade80';
-});
+}, performance.now() + 15000);
 
 // ───────────────────────────────────────────
 // Panel open/close
