@@ -7,10 +7,24 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>ArUco 計測</title>
 
-  <!-- js-aruco (posit1 は外部依存なし) -->
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/posit1.js"></script>
+  <!-- js-aruco via jsDelivr CDN -->
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/cv.js"
+    onerror="showLibError('cv.js')"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/aruco.js"
+    onerror="showLibError('aruco.js')"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco@master/src/posit1.js"
+    onerror="showLibError('posit1.js')"></script>
+  <script>
+    function showLibError(file) {
+      var el = document.getElementById('loading-msg');
+      if (el) {
+        el.textContent = file + ' の読み込みに失敗しました。Wi-Fiまたはモバイル通信を確認して「再読み込み」をタップしてください。';
+        el.style.color = '#f87171';
+      }
+      var btn = document.getElementById('reload-btn');
+      if (btn) btn.style.display = 'block';
+    }
+  </script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -198,7 +212,7 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { color: #94a3b8; font-size: 14px; }
+    #loading p { color: #94a3b8; font-size: 14px; text-align: center; padding: 0 20px; }
   </style>
 </head>
 <body>
@@ -265,7 +279,12 @@
   <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
-    <p>ライブラリを読み込み中…</p>
+    <p id="loading-msg">ライブラリを読み込み中…</p>
+    <button id="reload-btn" onclick="location.reload()"
+      style="display:none;margin-top:12px;background:#4ade80;color:#000;border:none;
+             border-radius:12px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;">
+      再読み込み
+    </button>
   </div>
 
   <!-- Splash -->
@@ -324,9 +343,18 @@ let frameCount = 0, lastFpsTime = performance.now();
 // ───────────────────────────────────────────
 // Library init
 // ───────────────────────────────────────────
-function waitForLib(cb) {
-  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') cb();
-  else setTimeout(() => waitForLib(cb), 100);
+const loadingMsg  = document.getElementById('loading-msg');
+const reloadBtn   = document.getElementById('reload-btn');
+
+function waitForLib(cb, deadline) {
+  if (typeof AR !== 'undefined' && typeof CV !== 'undefined') { cb(); return; }
+  if (performance.now() > deadline) {
+    loadingMsg.textContent = 'ライブラリの読み込みに失敗しました。ネットワーク接続を確認してください。';
+    loadingMsg.style.color = '#f87171';
+    reloadBtn.style.display = 'block';
+    return;
+  }
+  setTimeout(() => waitForLib(cb, deadline), 200);
 }
 waitForLib(() => {
   loading.classList.add('hidden');
@@ -334,7 +362,7 @@ waitForLib(() => {
   detector = new AR.Detector();
   badgeLib.textContent = 'ライブラリOK';
   badgeLib.style.color = '#4ade80';
-});
+}, performance.now() + 15000);
 
 // ───────────────────────────────────────────
 // Panel open/close
@@ -343,7 +371,6 @@ handleRow.addEventListener('click', () => {
   panelOpen = !panelOpen;
   panel.classList.toggle('mini', !panelOpen);
   panelTitle.textContent = panelOpen ? '計測パネル ↓' : '計測パネル ↑';
-  // Adjust badges position
   badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 280px)';
 });
 
@@ -408,18 +435,15 @@ btnClear.addEventListener('click', () => {
 function measure(id, corners) {
   const W = proc.width, H = proc.height;
 
-  // Center (px from image center; right/down = positive)
   const rawCx = corners.reduce((s, c) => s + c.x, 0) / 4;
   const rawCy = corners.reduce((s, c) => s + c.y, 0) / 4;
   const cx = rawCx - W / 2;
   const cy = rawCy - H / 2;
 
-  // In-plane rotation angle (edge 0→1)
   const ex = corners[1].x - corners[0].x;
   const ey = corners[1].y - corners[0].y;
   const angle = Math.atan2(ey, ex) * 180 / Math.PI;
 
-  // Apparent side length (average)
   let peri = 0;
   for (let i = 0; i < 4; i++) {
     const a = corners[i], b = corners[(i + 1) % 4];
@@ -427,11 +451,9 @@ function measure(id, corners) {
   }
   const sideLen = peri / 4;
 
-  // px/mm scale
   const sizeMm = parseFloat(inSize.value) || 0;
   const scale  = sizeMm > 0 ? sideLen / sizeMm : null;
 
-  // POSIT (3D pose)
   let pitch = null, roll = null, distCm = null, pose = null;
   if (sizeMm > 0 && typeof POS !== 'undefined') {
     try {
@@ -444,7 +466,7 @@ function measure(id, corners) {
       pitch  = Math.atan2(-R[2][0], Math.sqrt(R[2][1] ** 2 + R[2][2] ** 2)) * 180 / Math.PI;
       roll   = Math.atan2(R[2][1], R[2][2]) * 180 / Math.PI;
       distCm = Math.abs(T[2]) / 10;
-    } catch (_) { /* POSIT failed gracefully */ }
+    } catch (_) {}
   }
 
   return { cx, cy, angle, pitch, roll, distCm, scale, sideLen, pose, rawCx, rawCy };
@@ -458,28 +480,23 @@ let lastRender = 0;
 function loop() {
   if (!running || video.readyState < 2) { requestAnimationFrame(loop); return; }
 
-  // Capture frame
   pc.drawImage(video, 0, 0, proc.width, proc.height);
   const imageData = pc.getImageData(0, 0, proc.width, proc.height);
 
-  // Detect
   let detected = [];
   try { detected = detector.detect(imageData); } catch (_) {}
 
-  // Build marker list with measurements
   lastMarkers = detected.map(m => ({
     id:      m.id,
     corners: m.corners,
     meas:    measure(m.id, m.corners),
   }));
 
-  // Draw overlays
   oc.clearRect(0, 0, overlay.width, overlay.height);
   const sx = overlay.width  / proc.width;
   const sy = overlay.height / proc.height;
   for (const m of lastMarkers) drawMarker(m, sx, sy);
 
-  // FPS
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime > 600) {
@@ -490,7 +507,6 @@ function loop() {
     lastFpsTime = now;
   }
 
-  // Panel update at ~10 fps
   if (now - lastRender > 100) {
     lastRender = now;
     renderPanel();
@@ -509,7 +525,6 @@ function drawMarker(m, sx, sy) {
   const tolPos = parseFloat(inTolPos.value) || 10;
   const tolAng = parseFloat(inTolAng.value) || 3;
 
-  // Status color
   let sc = color;
   if (master) {
     const dPos = Math.hypot(meas.cx - master.cx, meas.cy - master.cy);
@@ -521,7 +536,6 @@ function drawMarker(m, sx, sy) {
 
   const pts = corners.map(c => [c.x * sx, c.y * sy]);
 
-  // Ghost outline (master position)
   if (master) {
     const ox = (master.cx - meas.cx) * sx;
     const oy = (master.cy - meas.cy) * sy;
@@ -534,16 +548,9 @@ function drawMarker(m, sx, sy) {
     oc.lineWidth = 2;
     oc.stroke();
     oc.setLineDash([]);
-
-    // Deviation arrow
-    drawArrow(
-      meas.rawCx * sx, meas.rawCy * sy,
-      master.rawCx * sx, master.rawCy * sy,
-      sc
-    );
+    drawArrow(meas.rawCx * sx, meas.rawCy * sy, master.rawCx * sx, master.rawCy * sy, sc);
   }
 
-  // Outline
   oc.beginPath();
   oc.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < 4; i++) oc.lineTo(pts[i][0], pts[i][1]);
@@ -553,7 +560,6 @@ function drawMarker(m, sx, sy) {
   oc.lineWidth   = 3;
   oc.fill(); oc.stroke();
 
-  // Corner dots (first corner = white = reference edge start)
   pts.forEach(([x, y], i) => {
     oc.beginPath(); oc.arc(x, y, 7, 0, Math.PI * 2);
     oc.fillStyle   = i === 0 ? '#ffffff' : sc;
@@ -561,10 +567,8 @@ function drawMarker(m, sx, sy) {
     oc.fill(); oc.stroke();
   });
 
-  // 3D axes
   if (meas.pose) drawAxes(meas, sx, sy);
 
-  // ID label
   const cx = pts.reduce((s, p) => s + p[0], 0) / 4;
   const cy = pts.reduce((s, p) => s + p[1], 0) / 4;
   oc.font = 'bold 18px -apple-system,sans-serif';
@@ -580,7 +584,7 @@ function drawMarker(m, sx, sy) {
 function drawAxes(meas, sx, sy) {
   const R = meas.pose.bestRotation;
   const T = meas.pose.bestTranslation;
-  const W = proc.width, H = proc.height;
+  const W = proc.width;
   const f = W * 0.8;
   const h = (parseFloat(inSize.value) || 100) * 0.6;
 
@@ -588,17 +592,12 @@ function drawAxes(meas, sx, sy) {
     const rx = R[0][0]*x + R[0][1]*y + R[0][2]*z + T[0];
     const ry = R[1][0]*x + R[1][1]*y + R[1][2]*z + T[1];
     const rz = R[2][0]*x + R[2][1]*y + R[2][2]*z + T[2];
-    return [(rx/rz)*f*sx + overlay.width/2,
-            -(ry/rz)*f*sx + overlay.height/2];
+    return [(rx/rz)*f*sx + overlay.width/2, -(ry/rz)*f*sx + overlay.height/2];
   }
 
-  const o  = proj(0, 0, 0);
-  const xa = proj(h, 0, 0);
-  const ya = proj(0, h, 0);
-  const za = proj(0, 0, -h);
-  axis(o, xa, '#f44', 'X');
-  axis(o, ya, '#4f4', 'Y');
-  axis(o, za, '#48f', 'Z');
+  axis(proj(0,0,0), proj(h,0,0), '#f44', 'X');
+  axis(proj(0,0,0), proj(0,h,0), '#4f4', 'Y');
+  axis(proj(0,0,0), proj(0,0,-h), '#48f', 'Z');
 }
 
 function axis([ox,oy], [tx,ty], color, label) {
@@ -636,11 +635,9 @@ function pill(ctx,x,y,w,h,r) {
 function renderPanel() {
   const ids = lastMarkers.map(m => m.id);
 
-  // Keep selection valid
   if (!ids.includes(selectedId) && ids.length > 0) selectedId = ids[0];
   if (ids.length === 0) selectedId = null;
 
-  // Tabs
   tabs.innerHTML = '';
   for (const m of lastMarkers) {
     const t = document.createElement('div');
@@ -694,7 +691,6 @@ function renderPanel() {
     return Math.abs(v) <= tol ? 'good' : Math.abs(v) <= tol * 2 ? 'warn' : 'bad';
   }
 
-  // Deviations
   let dX=null, dY=null, dA=null, dP=null, dR=null;
   if (master) {
     dX = meas.cx    - master.cx;
