@@ -246,6 +246,7 @@
   <div id="badges">
     <span class="badge" id="badge-fps">-- FPS</span>
     <span class="badge" id="badge-cnt">検出: 0</span>
+    <span class="badge" id="badge-cand" title="四角形候補（マーカーになり損ねた形状）">候補: 0</span>
     <span class="badge" id="badge-lib">ライブラリ読み込み中</span>
   </div>
 
@@ -264,6 +265,8 @@
             ここに計測値が表示されます。<br><br>
             マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
             ディクショナリで生成してください。<br><br>
+            <span style="color:#fb923c">オレンジの点線枠</span>が出るのに検出されない場合は<br>
+            ディクショナリ違いの可能性大です。<br><br>
             <a href="https://chev.me/arucogen/" target="_blank">
               ▶ マーカー生成サイト（Original ArUco を選択）
             </a>
@@ -327,6 +330,7 @@ const btnMaster  = document.getElementById('btn-master');
 const btnClear   = document.getElementById('btn-clear');
 const badgeFps   = document.getElementById('badge-fps');
 const badgeCnt   = document.getElementById('badge-cnt');
+const badgeCand  = document.getElementById('badge-cand');
 const badgeLib   = document.getElementById('badge-lib');
 const inSize     = document.getElementById('in-size');
 const inTolPos   = document.getElementById('in-tol-pos');
@@ -517,6 +521,21 @@ function loop() {
   oc.clearRect(0, 0, overlay.width, overlay.height);
   const sx = overlay.width  / proc.width;
   const sy = overlay.height / proc.height;
+  // Candidate quads (shapes found but not decoded as a valid marker) — diagnostic aid
+  if (detector && detector.candidates) {
+    oc.save();
+    oc.strokeStyle = '#fb923c';
+    oc.lineWidth = 2;
+    oc.setLineDash([6, 4]);
+    for (const cand of detector.candidates) {
+      oc.beginPath();
+      oc.moveTo(cand[0].x * sx, cand[0].y * sy);
+      for (let i = 1; i < cand.length; i++) oc.lineTo(cand[i].x * sx, cand[i].y * sy);
+      oc.closePath();
+      oc.stroke();
+    }
+    oc.restore();
+  }
   for (const m of lastMarkers) drawMarker(m, sx, sy);
 
   // FPS
@@ -526,6 +545,8 @@ function loop() {
     const fps = (frameCount / ((now - lastFpsTime) / 1000)).toFixed(1);
     badgeFps.textContent = `${fps} FPS`;
     badgeCnt.textContent = `検出: ${lastMarkers.length}`;
+    const candCount = detector && detector.candidates ? detector.candidates.length : 0;
+    badgeCand.textContent = `候補: ${candCount}`;
     frameCount = 0;
     lastFpsTime = now;
   }
@@ -706,6 +727,8 @@ function renderPanel() {
           ここに計測値が表示されます。<br><br>
           マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
           ディクショナリで生成してください。<br><br>
+          <span style="color:#fb923c">オレンジの点線枠</span>が出るのに検出されない場合は<br>
+          ディクショナリ違いの可能性大です。<br><br>
           <a href="https://chev.me/arucogen/" target="_blank">
             ▶ マーカー生成サイト（Original ArUco を選択）
           </a>
