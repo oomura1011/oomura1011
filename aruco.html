@@ -78,7 +78,7 @@
 
     /* ── Status badges (always visible) ── */
     #badges {
-      position: absolute; bottom: calc(var(--safe-bottom) + 280px);
+      position: absolute; bottom: calc(var(--safe-bottom) + 70px);
       left: 12px; display: flex; gap: 6px; z-index: 20;
     }
     .badge {
@@ -91,7 +91,7 @@
     #badge-cnt  { }
     #badge-lib  { color: #fbbf24; }
 
-    /* ── Measurement panel ── */
+    /* ── Measurement panel (always visible, swipeable) ── */
     #panel {
       position: absolute; bottom: 0; left: 0; right: 0;
       background: rgba(8,12,28,0.94); backdrop-filter: blur(20px);
@@ -213,7 +213,7 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { color: #94a3b8; font-size: 14px; text-align: center; padding: 0 20px; }
+    #loading p { color: #94a3b8; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -262,8 +262,10 @@
           <p>
             ArUcoマーカーをカメラに向けると<br>
             ここに計測値が表示されます。<br><br>
+            マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
+            ディクショナリで生成してください。<br><br>
             <a href="https://chev.me/arucogen/" target="_blank">
-              ▶ ARUCOマーカーを生成する（ブラウザで開く）
+              ▶ マーカー生成サイト（Original ArUco を選択）
             </a>
           </p>
         </div>
@@ -294,13 +296,20 @@
     <p>
       iPhoneのリアカメラでArUcoマーカーの<br>
       位置・角度・傾きをリアルタイム計測します。<br><br>
-      マスター登録でズレを数値確認できます。
+      マスター登録でズレを数値確認できます。<br><br>
+      <span style="font-size:12px;color:#4ade80;font-weight:700;">
+        ⚠ マーカーは必ず「Original ArUco」<br>
+        ディクショナリで作成してください
+      </span>
     </p>
     <button id="start-btn">カメラを起動</button>
   </div>
 
 </div>
 <script>
+// ───────────────────────────────────────────
+// Elements
+// ───────────────────────────────────────────
 const video      = document.getElementById('video');
 const proc       = document.getElementById('proc');
 const overlay    = document.getElementById('overlay');
@@ -323,12 +332,13 @@ const inSize     = document.getElementById('in-size');
 const inTolPos   = document.getElementById('in-tol-pos');
 const inTolAng   = document.getElementById('in-tol-ang');
 const badges     = document.getElementById('badges');
-const loadingMsg = document.getElementById('loading-msg');
-const reloadBtn  = document.getElementById('reload-btn');
 
 const PALETTE = ['#4ade80','#fb923c','#38bdf8','#f9a8d4','#a78bfa','#fbbf24','#f87171','#34d399'];
 function colorFor(id) { return PALETTE[id % PALETTE.length]; }
 
+// ───────────────────────────────────────────
+// State
+// ───────────────────────────────────────────
 let detector   = null;
 let running    = false;
 let selectedId = null;
@@ -337,7 +347,12 @@ const masters = {};
 let panelOpen = false;
 let frameCount = 0, lastFpsTime = performance.now();
 
-// ── Library init ──
+// ───────────────────────────────────────────
+// Library init
+// ───────────────────────────────────────────
+const loadingMsg  = document.getElementById('loading-msg');
+const reloadBtn   = document.getElementById('reload-btn');
+
 function waitForLib(cb, deadline) {
   if (typeof AR !== 'undefined' && typeof CV !== 'undefined') { cb(); return; }
   if (performance.now() > deadline) {
@@ -356,16 +371,20 @@ waitForLib(() => {
   badgeLib.style.color = '#4ade80';
 }, performance.now() + 15000);
 
-// ── Panel open/close ──
+// ───────────────────────────────────────────
+// Panel open/close
+// ───────────────────────────────────────────
 handleRow.addEventListener('click', () => {
   panelOpen = !panelOpen;
   panel.classList.toggle('mini', !panelOpen);
   panelTitle.classList.remove('has-marker');
   panelTitle.textContent = panelOpen ? '計測パネル ↓' : '計測パネルを開く ↑';
-  badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 280px)';
+  badges.style.bottom = panelOpen ? 'calc(60vh + 10px)' : 'calc(var(--safe-bottom, 16px) + 70px)';
 });
 
-// ── Camera ──
+// ───────────────────────────────────────────
+// Camera
+// ───────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', startCamera);
 
 async function startCamera() {
@@ -387,6 +406,11 @@ async function startCamera() {
       proc.width  = overlay.width  = vw;
       proc.height = overlay.height = vh;
       running = true;
+      // Open panel immediately so user can see the measurement area
+      panelOpen = true;
+      panel.classList.remove('mini');
+      panelTitle.textContent = '計測パネル ↓';
+      badges.style.bottom = 'calc(60vh + 10px)';
       requestAnimationFrame(loop);
     }, { once: true });
   } catch (e) {
@@ -397,7 +421,9 @@ async function startCamera() {
   }
 }
 
-// ── Master buttons ──
+// ───────────────────────────────────────────
+// Master buttons
+// ───────────────────────────────────────────
 btnMaster.addEventListener('click', () => {
   if (selectedId === null) return;
   const m = lastMarkers.find(m => m.id === selectedId);
@@ -416,24 +442,36 @@ btnClear.addEventListener('click', () => {
   renderPanel();
 });
 
-// ── Measurement ──
+// ───────────────────────────────────────────
+// Measurement
+// ───────────────────────────────────────────
 function measure(id, corners) {
   const W = proc.width, H = proc.height;
+
+  // Center (px from image center; right/down = positive)
   const rawCx = corners.reduce((s, c) => s + c.x, 0) / 4;
   const rawCy = corners.reduce((s, c) => s + c.y, 0) / 4;
   const cx = rawCx - W / 2;
   const cy = rawCy - H / 2;
+
+  // In-plane rotation angle (edge 0→1)
   const ex = corners[1].x - corners[0].x;
   const ey = corners[1].y - corners[0].y;
   const angle = Math.atan2(ey, ex) * 180 / Math.PI;
+
+  // Apparent side length (average)
   let peri = 0;
   for (let i = 0; i < 4; i++) {
     const a = corners[i], b = corners[(i + 1) % 4];
     peri += Math.hypot(b.x - a.x, b.y - a.y);
   }
   const sideLen = peri / 4;
+
+  // px/mm scale
   const sizeMm = parseFloat(inSize.value) || 0;
   const scale  = sizeMm > 0 ? sideLen / sizeMm : null;
+
+  // POSIT (3D pose)
   let pitch = null, roll = null, distCm = null, pose = null;
   if (sizeMm > 0 && typeof POS !== 'undefined') {
     try {
@@ -441,38 +479,47 @@ function measure(id, corners) {
       const posit = new POS.Posit(sizeMm, focalLen);
       const imgPts = corners.map(c => ({ x: c.x - W / 2, y: -(c.y - H / 2) }));
       pose = posit.pose(imgPts);
-      const R = pose.bestRotation, T = pose.bestTranslation;
-      pitch  = Math.atan2(-R[2][0], Math.sqrt(R[2][1]**2 + R[2][2]**2)) * 180 / Math.PI;
+      const R = pose.bestRotation;
+      const T = pose.bestTranslation;
+      pitch  = Math.atan2(-R[2][0], Math.sqrt(R[2][1] ** 2 + R[2][2] ** 2)) * 180 / Math.PI;
       roll   = Math.atan2(R[2][1], R[2][2]) * 180 / Math.PI;
       distCm = Math.abs(T[2]) / 10;
-    } catch (_) {}
+    } catch (_) { /* POSIT failed gracefully */ }
   }
+
   return { cx, cy, angle, pitch, roll, distCm, scale, sideLen, pose, rawCx, rawCy };
 }
 
-// ── Main loop ──
+// ───────────────────────────────────────────
+// Main loop
+// ───────────────────────────────────────────
 let lastRender = 0;
 
 function loop() {
   if (!running || video.readyState < 2) { requestAnimationFrame(loop); return; }
 
+  // Capture frame
   pc.drawImage(video, 0, 0, proc.width, proc.height);
   const imageData = pc.getImageData(0, 0, proc.width, proc.height);
 
+  // Detect
   let detected = [];
   try { detected = detector.detect(imageData); } catch (_) {}
 
+  // Build marker list with measurements
   lastMarkers = detected.map(m => ({
     id:      m.id,
     corners: m.corners,
     meas:    measure(m.id, m.corners),
   }));
 
+  // Draw overlays
   oc.clearRect(0, 0, overlay.width, overlay.height);
   const sx = overlay.width  / proc.width;
   const sy = overlay.height / proc.height;
   for (const m of lastMarkers) drawMarker(m, sx, sy);
 
+  // FPS
   frameCount++;
   const now = performance.now();
   if (now - lastFpsTime > 600) {
@@ -483,15 +530,12 @@ function loop() {
     lastFpsTime = now;
   }
 
-  // Auto-open panel when first marker detected
-  if (lastMarkers.length > 0 && !panelOpen) {
-    panelOpen = true;
-    panel.classList.remove('mini');
-    panelTitle.textContent = '計測パネル ↓';
+  // Pulse panel title on first marker detection
+  if (lastMarkers.length > 0 && !panelTitle.classList.contains('has-marker')) {
     panelTitle.classList.add('has-marker');
-    badges.style.bottom = 'calc(60vh + 10px)';
   }
 
+  // Panel update at ~10 fps
   if (now - lastRender > 100) {
     lastRender = now;
     renderPanel();
@@ -500,7 +544,9 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ── Drawing ──
+// ───────────────────────────────────────────
+// Drawing
+// ───────────────────────────────────────────
 function drawMarker(m, sx, sy) {
   const { id, corners, meas } = m;
   const color  = colorFor(id);
@@ -508,6 +554,7 @@ function drawMarker(m, sx, sy) {
   const tolPos = parseFloat(inTolPos.value) || 10;
   const tolAng = parseFloat(inTolAng.value) || 3;
 
+  // Status color
   let sc = color;
   if (master) {
     const dPos = Math.hypot(meas.cx - master.cx, meas.cy - master.cy);
@@ -519,6 +566,7 @@ function drawMarker(m, sx, sy) {
 
   const pts = corners.map(c => [c.x * sx, c.y * sy]);
 
+  // Ghost outline (master position)
   if (master) {
     const ox = (master.cx - meas.cx) * sx;
     const oy = (master.cy - meas.cy) * sy;
@@ -531,9 +579,16 @@ function drawMarker(m, sx, sy) {
     oc.lineWidth = 2;
     oc.stroke();
     oc.setLineDash([]);
-    drawArrow(meas.rawCx * sx, meas.rawCy * sy, master.rawCx * sx, master.rawCy * sy, sc);
+
+    // Deviation arrow
+    drawArrow(
+      meas.rawCx * sx, meas.rawCy * sy,
+      master.rawCx * sx, master.rawCy * sy,
+      sc
+    );
   }
 
+  // Outline
   oc.beginPath();
   oc.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < 4; i++) oc.lineTo(pts[i][0], pts[i][1]);
@@ -543,6 +598,7 @@ function drawMarker(m, sx, sy) {
   oc.lineWidth   = 3;
   oc.fill(); oc.stroke();
 
+  // Corner dots (first corner = white = reference edge start)
   pts.forEach(([x, y], i) => {
     oc.beginPath(); oc.arc(x, y, 7, 0, Math.PI * 2);
     oc.fillStyle   = i === 0 ? '#ffffff' : sc;
@@ -550,8 +606,10 @@ function drawMarker(m, sx, sy) {
     oc.fill(); oc.stroke();
   });
 
+  // 3D axes
   if (meas.pose) drawAxes(meas, sx, sy);
 
+  // ID label
   const cx = pts.reduce((s, p) => s + p[0], 0) / 4;
   const cy = pts.reduce((s, p) => s + p[1], 0) / 4;
   oc.font = 'bold 18px -apple-system,sans-serif';
@@ -565,18 +623,27 @@ function drawMarker(m, sx, sy) {
 }
 
 function drawAxes(meas, sx, sy) {
-  const R = meas.pose.bestRotation, T = meas.pose.bestTranslation;
-  const f = proc.width * 0.8;
+  const R = meas.pose.bestRotation;
+  const T = meas.pose.bestTranslation;
+  const W = proc.width, H = proc.height;
+  const f = W * 0.8;
   const h = (parseFloat(inSize.value) || 100) * 0.6;
+
   function proj(x, y, z) {
-    const rx = R[0][0]*x+R[0][1]*y+R[0][2]*z+T[0];
-    const ry = R[1][0]*x+R[1][1]*y+R[1][2]*z+T[1];
-    const rz = R[2][0]*x+R[2][1]*y+R[2][2]*z+T[2];
-    return [(rx/rz)*f*sx + overlay.width/2, -(ry/rz)*f*sx + overlay.height/2];
+    const rx = R[0][0]*x + R[0][1]*y + R[0][2]*z + T[0];
+    const ry = R[1][0]*x + R[1][1]*y + R[1][2]*z + T[1];
+    const rz = R[2][0]*x + R[2][1]*y + R[2][2]*z + T[2];
+    return [(rx/rz)*f*sx + overlay.width/2,
+            -(ry/rz)*f*sx + overlay.height/2];
   }
-  axis(proj(0,0,0), proj(h,0,0), '#f44', 'X');
-  axis(proj(0,0,0), proj(0,h,0), '#4f4', 'Y');
-  axis(proj(0,0,0), proj(0,0,-h), '#48f', 'Z');
+
+  const o  = proj(0, 0, 0);
+  const xa = proj(h, 0, 0);
+  const ya = proj(0, h, 0);
+  const za = proj(0, 0, -h);
+  axis(o, xa, '#f44', 'X');
+  axis(o, ya, '#4f4', 'Y');
+  axis(o, za, '#48f', 'Z');
 }
 
 function axis([ox,oy], [tx,ty], color, label) {
@@ -608,12 +675,17 @@ function pill(ctx,x,y,w,h,r) {
   ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 
-// ── Panel renderer ──
+// ───────────────────────────────────────────
+// Panel renderer
+// ───────────────────────────────────────────
 function renderPanel() {
   const ids = lastMarkers.map(m => m.id);
+
+  // Keep selection valid
   if (!ids.includes(selectedId) && ids.length > 0) selectedId = ids[0];
   if (ids.length === 0) selectedId = null;
 
+  // Tabs
   tabs.innerHTML = '';
   for (const m of lastMarkers) {
     const t = document.createElement('div');
@@ -632,8 +704,10 @@ function renderPanel() {
         <p>
           ArUcoマーカーをカメラに向けると<br>
           ここに計測値が表示されます。<br><br>
+          マーカーは必ず <strong style="color:#4ade80">「Original ArUco」</strong><br>
+          ディクショナリで生成してください。<br><br>
           <a href="https://chev.me/arucogen/" target="_blank">
-            ▶ ARUCOマーカーを生成する
+            ▶ マーカー生成サイト（Original ArUco を選択）
           </a>
         </p>
       </div>`;
@@ -661,11 +735,13 @@ function renderPanel() {
   const f1 = v => v == null ? '--' : v.toFixed(1);
   const f0 = v => v == null ? '--' : Math.round(v);
   const sign = v => v >= 0 ? '+' : '';
+
   function cls(v, tol) {
     if (v == null) return '';
     return Math.abs(v) <= tol ? 'good' : Math.abs(v) <= tol * 2 ? 'warn' : 'bad';
   }
 
+  // Deviations
   let dX=null, dY=null, dA=null, dP=null, dR=null;
   if (master) {
     dX = meas.cx    - master.cx;
@@ -679,32 +755,74 @@ function renderPanel() {
     <div class="meas-grid">
       <div class="meas-card">
         <h4>位置（画面中心から）</h4>
-        <div class="meas-row"><span class="meas-key">X（右＋）</span><span class="meas-val">${f0(meas.cx)} px</span></div>
-        <div class="meas-row"><span class="meas-key">Y（下＋）</span><span class="meas-val">${f0(meas.cy)} px</span></div>
-        ${meas.scale ? `<div class="meas-row"><span class="meas-key">スケール</span><span class="meas-val">${meas.scale.toFixed(2)} px/mm</span></div>` : ''}
+        <div class="meas-row">
+          <span class="meas-key">X（右＋）</span>
+          <span class="meas-val">${f0(meas.cx)} px</span>
+        </div>
+        <div class="meas-row">
+          <span class="meas-key">Y（下＋）</span>
+          <span class="meas-val">${f0(meas.cy)} px</span>
+        </div>
+        ${meas.scale ? `<div class="meas-row">
+          <span class="meas-key">スケール</span>
+          <span class="meas-val">${meas.scale.toFixed(2)} px/mm</span>
+        </div>` : ''}
       </div>
       <div class="meas-card">
         <h4>角度・傾き</h4>
-        <div class="meas-row"><span class="meas-key">面内角度</span><span class="meas-val">${f1(meas.angle)}°</span></div>
-        <div class="meas-row"><span class="meas-key">ピッチ</span><span class="meas-val">${f1(meas.pitch)}°</span></div>
-        <div class="meas-row"><span class="meas-key">ロール</span><span class="meas-val">${f1(meas.roll)}°</span></div>
-        ${meas.distCm != null ? `<div class="meas-row"><span class="meas-key">距離</span><span class="meas-val">${f1(meas.distCm)} cm</span></div>` : ''}
+        <div class="meas-row">
+          <span class="meas-key">面内角度</span>
+          <span class="meas-val">${f1(meas.angle)}°</span>
+        </div>
+        <div class="meas-row">
+          <span class="meas-key">ピッチ</span>
+          <span class="meas-val">${f1(meas.pitch)}°</span>
+        </div>
+        <div class="meas-row">
+          <span class="meas-key">ロール</span>
+          <span class="meas-val">${f1(meas.roll)}°</span>
+        </div>
+        ${meas.distCm != null ? `<div class="meas-row">
+          <span class="meas-key">距離</span>
+          <span class="meas-val">${f1(meas.distCm)} cm</span>
+        </div>` : ''}
       </div>
+
       ${master ? `
       <div class="meas-card full">
         <h4>マスターからのズレ</h4>
-        <div class="meas-row"><span class="meas-key">ΔX</span><span class="meas-val ${cls(dX,tolPos)}">${sign(dX)}${f0(dX)} px</span></div>
-        <div class="meas-row"><span class="meas-key">ΔY</span><span class="meas-val ${cls(dY,tolPos)}">${sign(dY)}${f0(dY)} px</span></div>
-        <div class="meas-row"><span class="meas-key">Δ面内角度</span><span class="meas-val ${cls(dA,tolAng)}">${sign(dA)}${f1(dA)}°</span></div>
-        ${dP != null ? `<div class="meas-row"><span class="meas-key">Δピッチ</span><span class="meas-val ${cls(dP,tolAng)}">${sign(dP)}${f1(dP)}°</span></div>` : ''}
-        ${dR != null ? `<div class="meas-row"><span class="meas-key">Δロール</span><span class="meas-val ${cls(dR,tolAng)}">${sign(dR)}${f1(dR)}°</span></div>` : ''}
+        <div class="meas-row">
+          <span class="meas-key">ΔX</span>
+          <span class="meas-val ${cls(dX,tolPos)}">${sign(dX)}${f0(dX)} px</span>
+        </div>
+        <div class="meas-row">
+          <span class="meas-key">ΔY</span>
+          <span class="meas-val ${cls(dY,tolPos)}">${sign(dY)}${f0(dY)} px</span>
+        </div>
+        <div class="meas-row">
+          <span class="meas-key">Δ面内角度</span>
+          <span class="meas-val ${cls(dA,tolAng)}">${sign(dA)}${f1(dA)}°</span>
+        </div>
+        ${dP != null ? `<div class="meas-row">
+          <span class="meas-key">Δピッチ</span>
+          <span class="meas-val ${cls(dP,tolAng)}">${sign(dP)}${f1(dP)}°</span>
+        </div>` : ''}
+        ${dR != null ? `<div class="meas-row">
+          <span class="meas-key">Δロール</span>
+          <span class="meas-val ${cls(dR,tolAng)}">${sign(dR)}${f1(dR)}°</span>
+        </div>` : ''}
       </div>` : `
       <div class="meas-card full" style="text-align:center;padding:14px;">
-        <p style="color:#475569;font-size:12px;">「マスター登録」をタップすると<br>現在位置を基準として保存します</p>
+        <p style="color:#475569;font-size:12px;">
+          「マスター登録」をタップすると<br>現在位置を基準として保存します
+        </p>
       </div>`}
     </div>`;
 }
 
+// ───────────────────────────────────────────
+// Helpers
+// ───────────────────────────────────────────
 function angleDiff(a, b) {
   let d = a - b;
   while (d >  180) d -= 360;
